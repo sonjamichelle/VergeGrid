@@ -2,7 +2,11 @@
 # ==============================================================
 # VergeGrid Secure MySQL Root + User Provisioning Utility
 # Windows Edition — Full Secure Setup
-# (includes GridCommon.ini, Robust.ini and Robust.HG.ini patch)
+# Includes:
+#   - MySQL root password hardening
+#   - Creation of vergeadmin, robustuser, opensimuser accounts
+#   - Role-based privilege grants (DBManager, DBDesigner, BackupAdmin)
+#   - Automatic OpenSim configuration patch (GridCommon.ini, Robust.ini, Robust.HG.ini)
 # ==============================================================
 
 import re
@@ -60,20 +64,24 @@ def validate_password(pw: str) -> bool:
     return True
 
 # --------------------------------------------------------------
-# Collect and confirm password input
+# Collect and confirm password input (looping until valid)
 # --------------------------------------------------------------
 def collect_password(user_label):
-    pw1 = input(f"Enter password for {user_label}: ")
-    pw2 = input(f"Re-enter password for {user_label} to confirm: ")
-    if pw1 != pw2:
-        print(f"❌ Passwords for {user_label} do not match.")
-        logging.error(f"{user_label} password confirmation mismatch.")
-        sys.exit(1)
-    if not validate_password(pw1):
-        print(f"❌ {user_label} password validation failed.")
-        logging.error(f"{user_label} password did not meet security requirements.")
-        sys.exit(1)
-    return pw1
+    """Prompt repeatedly until a valid, matching password is entered."""
+    while True:
+        pw1 = input(f"Enter password for {user_label}: ")
+        pw2 = input(f"Re-enter password for {user_label} to confirm: ")
+
+        if pw1 != pw2:
+            print(f"❌ Passwords for {user_label} do not match. Please try again.\n")
+            continue
+
+        if not validate_password(pw1):
+            print(f"❌ {user_label} password validation failed. Please try again.\n")
+            continue
+
+        print(f"✅ Password accepted for {user_label}.\n")
+        return pw1
 
 # --------------------------------------------------------------
 # File patch helper
@@ -183,18 +191,28 @@ def change_root_password_and_create_users():
         # RobustUser
         cursor.execute("DROP USER IF EXISTS 'robustuser'@'localhost';")
         cursor.execute(f"CREATE USER 'robustuser'@'localhost' IDENTIFIED BY '{robust_pw}';")
-        cursor.execute("GRANT ALL PRIVILEGES ON robust_db.* TO 'robustuser'@'localhost';")
+        cursor.execute("""
+            GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP,
+                   CREATE VIEW, SHOW VIEW, EVENT, TRIGGER,
+                   LOCK TABLES, REFERENCES
+            ON robust_db.* TO 'robustuser'@'localhost';
+        """)
 
         # OpenSimUser
         cursor.execute("DROP USER IF EXISTS 'opensimuser'@'localhost';")
         cursor.execute(f"CREATE USER 'opensimuser'@'localhost' IDENTIFIED BY '{opensim_pw}';")
-        cursor.execute("GRANT ALL PRIVILEGES ON opensim_db.* TO 'opensimuser'@'localhost';")
+        cursor.execute("""
+            GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP,
+                   CREATE VIEW, SHOW VIEW, EVENT, TRIGGER,
+                   LOCK TABLES, REFERENCES
+            ON opensim_db.* TO 'opensimuser'@'localhost';
+        """)
 
         cursor.execute("FLUSH PRIVILEGES;")
         conn.commit()
 
-        print("✅ All VergeGrid MySQL service accounts created successfully.")
-        logging.info("MySQL users vergeadmin, robustuser, and opensimuser created successfully.")
+        print("✅ All VergeGrid MySQL service accounts created with DBManager, DBDesigner, and BackupAdmin privileges.")
+        logging.info("MySQL users vergeadmin, robustuser, and opensimuser created with DBManager/Designer/BackupAdmin privileges.")
     except mysql.connector.Error as err:
         logging.error(f"MySQL user creation failed: {err}")
         print(f"[ERROR] Failed to create VergeGrid MySQL users: {err}")
@@ -219,27 +237,43 @@ def change_root_password_and_create_users():
     # --- Step 5: Patch GridCommon.ini, Robust.ini, Robust.HG.ini ---
     print("\n[INFO] Updating OpenSim configuration files...")
 
-    base_opensim_path = os.path.join(os.path.dirname(base_dir), "OpenSim", "bin", "config-include")
-    gridcommon_path   = os.path.join(base_opensim_path, "GridCommon.ini")
-    robust_path       = os.path.join(os.path.dirname(base_opensim_path), "Robust.ini")
-    robust_hg_path    = os.path.join(os.path.dirname(base_opensim_path), "Robust.HG.ini")
+    # Determine install_root from command-line arg or stored file
+    install_root = None
+    if len(sys.argv) > 1:
+        install_root = sys.argv[1]
+    else:
+        install_path_file = os.path.join(base_dir, "install_path.txt")
+        if os.path.exists(install_path_file):
+            with open(install_path_file, "r", encoding="utf-8") as f:
+                install_root = f.read().strip()
 
-    replacements = {
-        "gridcommon": ("opensimuser", opensim_pw),
-        "robust":     ("robustuser",  robust_pw),
-        "robust.hg":  ("robustuser",  robust_pw),
-    }
+    if not install_root or not os.path.exists(install_root):
+        print("[WARN] Could not determine valid install_root. Skipping config patch.")
+        logging.warning("install_root argument missing or invalid; skipping INI patch.")
+    else:
+        print(f"[INFO] Using install root: {install_root}")
+        gridcommon_path = os.path.join(install_root, "OpenSim", "bin", "config-include", "GridCommon.ini")
+        robust_path     = os.path.join(install_root, "OpenSim", "bin", "Robust.ini")
+        robust_hg_path  = os.path.join(install_root, "OpenSim", "bin", "Robust.HG.ini")
 
-    patched_gc = patch_connection_file(gridcommon_path, replacements)
-    patched_rb = patch_connection_file(robust_path, replacements)
-    patched_hg = patch_connection_file(robust_hg_path, replacements)
+        replacements = {
+            "gridcommon": ("opensimuser", opensim_pw),
+            "robust":     ("robustuser",  robust_pw),
+            "robust.hg":  ("robustuser",  robust_pw),
+        }
 
-    if not patched_gc:
-        print("[WARN] Could not locate or update GridCommon.ini automatically.")
-    if not patched_rb:
-        print("[WARN] Could not locate or update Robust.ini automatically.")
-    if not patched_hg:
-        print("[WARN] Could not locate or update Robust.HG.ini automatically.")
+        patched_gc = patch_connection_file(gridcommon_path, replacements) if os.path.exists(gridcommon_path) else False
+        patched_rb = patch_connection_file(robust_path, replacements) if os.path.exists(robust_path) else False
+        patched_hg = patch_connection_file(robust_hg_path, replacements) if os.path.exists(robust_hg_path) else False
+
+        if not patched_gc:
+            print(f"[WARN] Could not locate or update GridCommon.ini at {gridcommon_path}")
+        if not patched_rb:
+            print(f"[WARN] Could not locate or update Robust.ini at {robust_path}")
+        if not patched_hg:
+            print(f"[WARN] Could not locate or update Robust.HG.ini at {robust_hg_path}")
+        else:
+            print("[OK] All detected OpenSim configuration files updated successfully.")
 
     cursor.close()
     conn.close()

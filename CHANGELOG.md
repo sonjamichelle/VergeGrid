@@ -6,6 +6,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ---
 
+### [v0.0.10] – 2025-11-18 0959 Secure MySQL root, admin and server users
+
+### Added
+- DBManager, DBDesigner, BackupAdmin privilege sets for robustuser and opensimuser
+### Improved
+- Enhanced role-based security for MySQL provisioning
+- Maintains compatibility with automated VergeGrid installer
+- Simplified privilege model for OpenSim database management
+
 ## [v0.9.9] – 2025-11-18 0933 Secure Mysql
 
 ### Added

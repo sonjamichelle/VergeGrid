@@ -5,7 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [v0.9.4] – 2025-11-18 05:52 UTC
 
+### 🛠️ Changed
+- Installer now properly detects and halts on user cancellation from Environment Manager
+- Added pre-install Environment Manager integration phase
+- Updated run_component() to respect sentinel `::VERGEGRID_CANCELLED::` and exit code 111
+
+### 🧱 Internal Improvements
+- Improved subprocess handling for safer cleanup and installation workflows
+- Ensured consistent termination behavior across all VergeGrid installer modules
 
 ## [v0.9.3] – 2025-11-18 05:17 UTC
 

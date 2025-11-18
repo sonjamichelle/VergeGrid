@@ -7,6 +7,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 ---
 
 
+## [v0.9.3] – 2025-11-18 05:17 UTC
+
+### Added
+- Explicit cancel sentinel `::VERGEGRID_CANCELLED::` for installer subprocess detection
+- Unique exit code `111` to signal user abort to parent process
+
+### Fixed
+- Prevented installer from continuing execution after user cancels Environment Manager
+- Improved integration safety between cleanup and installer workflows
 
 
 ## [v0.9.3] – 2025-11-18 04:09

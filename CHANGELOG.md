@@ -5,6 +5,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [v0.9.5] – 2025-11-18 06:08 UTC
+
+### 🛠️ Changed
+- Installer now auto-detects Environment Manager location across setup hierarchy
+- Fixed false "Environment Manager not found" warning
+- Installer halts correctly when cleanup is cancelled by user
+
+### 🧱 Internal Improvements
+- Unified path resolution for setup utilities
+- Hardened subprocess control and sentinel detection
+
 ## [v0.9.4] – 2025-11-18 05:52 UTC
 
 ### 🛠️ Changed

@@ -16,6 +16,8 @@ import time
 import signal
 import subprocess
 import pymysql
+import psutil
+from math import ceil
 from pathlib import Path
 
 # --- VergeGrid Path Fix ---
@@ -131,13 +133,9 @@ def launch_and_verify(install_root):
 
     robust_exe = opensim_root / "Robust.exe"
     robust_ini = opensim_root / "Robust.ini"
-    robust_log = logs_root / "Robust_debug.log"
 
     print("\n>>> Launching Robust.exe (Grid Mode) for schema population...")
 
-    # --------------------------------------------------------------------
-    # Sanity Checks
-    # --------------------------------------------------------------------
     if not robust_exe.exists():
         print(f"[FATAL] {robust_exe} not found. Cannot continue.")
         common.write_log(f"[FATAL] Missing {robust_exe}", "ERROR")
@@ -148,9 +146,6 @@ def launch_and_verify(install_root):
         common.write_log(f"[FATAL] Missing {robust_ini}", "ERROR")
         return 2
 
-    # --------------------------------------------------------------------
-    # Start Robust.exe visibly (no stdout redirection)
-    # --------------------------------------------------------------------
     try:
         robust_process = subprocess.Popen(
             [str(robust_exe), "-inifile", "Robust.ini"],
@@ -163,22 +158,86 @@ def launch_and_verify(install_root):
         return 3
 
     print(f"✓ Robust.exe started (PID={robust_process.pid}) using {robust_ini.name}.")
-    print("  Waiting 30 seconds for schema creation...\n\nDO NOT CLOSE THE CONSOLE OR INTERACT WITH IT.\n\nJUST SIT BACK AND CHILL FOR A BIT.")
+
+    # Wait for process to initialize
+    print("\n[INFO] Waiting for Robust.exe to initialize...")
+    try:
+        proc = psutil.Process(robust_process.pid)
+    except Exception as e:
+        print(f"[WARN] Could not attach to process {robust_process.pid}: {e}")
+        proc = None
+
+    wait_for_start = 10
+    for i in range(wait_for_start):
+        if proc and proc.is_running():
+            cpu = proc.cpu_percent(interval=1.0)
+            if cpu > 0.1:
+                print(f"  [OK] Robust.exe responding (PID={robust_process.pid}).")
+                break
+        else:
+            time.sleep(1)
+    else:
+        print("  [WARN] Process took too long to respond, continuing anyway.")
+
+    # Live countdown for schema initialization
+    total_wait = 30
+    print(f"\n[INFO] Waiting {total_wait} seconds for schema creation...\n")
+    print("DO NOT CLOSE THE CONSOLE OR INTERACT WITH IT.")
+    print("JUST SIT BACK AND CHILL FOR A BIT.\n")
+
+    for remaining in range(total_wait, 0, -1):
+        sys.stdout.write(f"\r⏳ Initializing database schema... {remaining:2d}s remaining")
+        sys.stdout.flush()
+        if proc and not proc.is_running():
+            sys.stdout.write("\r⚠️  Robust.exe exited unexpectedly during initialization!\n")
+            sys.stdout.flush()
+            common.write_log("[ERROR] Robust.exe exited prematurely during wait period.", "ERROR")
+            return 4
+        time.sleep(1)
+
+    sys.stdout.write("\r✅ Schema creation wait complete!                           \n")
+    sys.stdout.flush()
     common.write_log(f"[INFO] Robust.exe launched (PID={robust_process.pid})", "INFO")
 
     # --------------------------------------------------------------------
-    # Wait for startup and check DB schema creation
+    # Verify DB (measure verification time)
     # --------------------------------------------------------------------
-    time.sleep(30)
-
-    print(">>> Checking database status (pass 1)...")
+    print("\n>>> Checking database status (pass 1)...")
+    start_verify = time.time()
     result = verify_robust_db(install_root)
+    verify_duration = ceil(time.time() - start_verify)
+
     if result == 0:
         print("✓ Database verified successfully on first pass.")
         common.write_log("[OK] Database verified on first pass.", "INFO")
+
+        # ----------------------------------------------------------------
+        # Countdown before graceful shutdown (duration = verify time)
+        # ----------------------------------------------------------------
+        print(f"\n>>> Attempting to close Robust.exe gracefully in {verify_duration}s...")
+        for remaining in range(verify_duration, 0, -1):
+            sys.stdout.write(f"\r⏳ Preparing to shut down Robust.exe... {remaining:2d}s")
+            sys.stdout.flush()
+            time.sleep(1)
+        sys.stdout.write("\r🔧 Initiating shutdown now...                               \n")
+        sys.stdout.flush()
     else:
-        print("⚠️  Database not yet complete. Waiting 30 more seconds...\n\nDO NOT CLOSE THE CONSOLE OR INTERACT WITH IT.\n\nJUST SIT BACK AND CHILL FOR A BIT.")
-        time.sleep(30)
+        # Second pass
+        total_wait_2 = 30
+        print("⚠️  Database not yet complete. Waiting 30 more seconds...\n")
+        print("DO NOT CLOSE THE CONSOLE OR INTERACT WITH IT.")
+        print("JUST SIT BACK AND CHILL FOR A BIT.\n")
+        for remaining in range(total_wait_2, 0, -1):
+            sys.stdout.write(f"\r⏳ Retrying verification in {remaining:2d}s...")
+            sys.stdout.flush()
+            if proc and not proc.is_running():
+                sys.stdout.write("\r⚠️  Robust.exe exited unexpectedly before second check!\n")
+                sys.stdout.flush()
+                common.write_log("[ERROR] Robust.exe exited before second check.", "ERROR")
+                return 5
+            time.sleep(1)
+        sys.stdout.write("\r🔁 Retrying verification now...                             \n")
+        sys.stdout.flush()
         print(">>> Checking database status (pass 2)...")
         result = verify_robust_db(install_root)
         if result != 0:
@@ -188,14 +247,13 @@ def launch_and_verify(install_root):
             return 2
 
     # --------------------------------------------------------------------
-    # Attempt to gracefully stop Robust.exe
+    # Graceful stop (with log)
     # --------------------------------------------------------------------
     print("\n>>> Attempting to close Robust.exe gracefully...")
     try:
         robust_process.send_signal(signal.CTRL_BREAK_EVENT)
         time.sleep(10)
 
-        # Check if process still running
         if robust_process.poll() is None:
             robust_process.terminate()
             time.sleep(5)
@@ -214,64 +272,7 @@ def launch_and_verify(install_root):
 
 
 # ------------------------------------------------------------
-# Create Windows Service for Robust (Grid Mode)
-# ------------------------------------------------------------
-def create_service(name, robust_exe, install_root):
-    """
-    Registers VergeGrid Robust as a manual-start Windows service
-    that uses Robust.HG.ini as its configuration file.
-    """
-    try:
-        service_cmd = f'"{robust_exe}" -inifile Robust.ini'
-        display_name = "VergeGrid Robust (Grid Mode)"
-        description = "VergeGrid Robust Services (Login, Grid, Inventory, User, Asset, and Messaging)"
-
-        print(f"[*] Creating Windows service '{name}'...")
-        subprocess.run(
-            [
-                "sc", "create", name,
-                f"binPath= {service_cmd}",
-                f"DisplayName= {display_name}",
-                "start= demand"  # Manual start mode
-            ],
-            capture_output=True,
-            text=True
-        )
-        subprocess.run(
-            ["sc", "description", name, description],
-            capture_output=True,
-            text=True
-        )
-
-        print(f"✓ Service '{name}' created successfully (manual start).")
-        print(f"  Command: {service_cmd}\n")
-        common.write_log(f"[OK] Created Windows service (manual, HG mode): {name}", "INFO")
-
-        # Optional: Write a small helper BAT for debugging the service launch
-        logs_root = Path(install_root) / "Logs"
-        opensim_root = Path(install_root) / "OpenSim" / "bin"
-        debug_bat = opensim_root / "launch_robust_service_debug.bat"
-        robust_log = logs_root / "Robust_service_debug.log"
-
-        debug_bat.write_text(f"""@echo off
-cd /d "{opensim_root}"
-echo [Robust Service Debug] Launching Robust.exe (HG mode) at %date% %time% >> "{robust_log}"
-"{robust_exe}" -inifile Robust.HG.ini -console >> "{robust_log}" 2>&1
-echo. >> "{robust_log}"
-echo [Robust Service Debug] Robust.exe exited with code %errorlevel% at %time% >> "{robust_log}"
-echo.
-pause
-""", encoding="utf-8")
-
-        common.write_log(f"[INFO] Created service debug launcher: {debug_bat}", "INFO")
-
-    except Exception as e:
-        common.write_log(f"[ERROR] Failed to create service {name}: {e}", "ERROR")
-        print(f"[ERROR] Failed to create service {name}: {e}")
-
-
-# ------------------------------------------------------------
-# ENTRY POINT (Dynamic)
+# ENTRY POINT
 # ------------------------------------------------------------
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -282,4 +283,3 @@ if __name__ == "__main__":
     print("=== VergeGrid Robust Database Verification and Controlled Startup ===")
     result = launch_and_verify(install_root)
     sys.exit(result)
-

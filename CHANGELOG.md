@@ -6,6 +6,32 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ---
 
+##  [v0.9.8] [2025-11-18] VergeGrid Installer — Build 2025.11.18a
+
+### ✨ Added
+- **Dynamic service setup:**  
+  `init-services.py` now reads the actual installation root (`install_path.txt`) set by the user and correctly registers MySQL, Apache, and Robust as Windows services with automatic cleanup of older instances.
+
+- **Dynamic process countdowns:**  
+  `verify-db-robust.py` now includes a live, real-time countdown for schema creation and re-verification. Countdown starts only once `Robust.exe` is confirmed active.
+
+- **Dynamic shutdown timer:**  
+  Graceful shutdown delay now matches the duration of the database verification process, rounded up to the nearest second.
+
+### 🛠️ Improved
+- More robust startup verification for `Robust.exe` using CPU utilization tracking.
+- Better console user experience — live status messages, emoji feedback, and safe exit on early process failure.
+- Consistent logging structure across installer modules.
+
+### 🧩 Internal
+- Installer now persists `install_path.txt` for downstream components.
+- Minor refactoring for readability and modularity in `vergegrid-installer.py`.
+
+---
+**Build Summary:**  
+Improves installer stability, service accuracy, and UX responsiveness during grid setup and schema initialization.
+
+
 ## [v0.9.7] – 2025-11-18 06:49 UTC
 
 ### 🛠️ Changed

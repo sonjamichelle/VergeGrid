@@ -168,6 +168,14 @@ def main():
     os.makedirs(downloads_root, exist_ok=True)
     os.makedirs(logs_root, exist_ok=True)
 
+    # Save selected install path for downstream scripts
+    setup_dir = Path(__file__).resolve().parent / "setup"
+    setup_dir.mkdir(exist_ok=True)
+    install_path_file = setup_dir / "install_path.txt"
+    with open(install_path_file, "w", encoding="utf-8") as f:
+        f.write(install_root)
+    print(f"[OK] Saved install path to {install_path_file}")
+
     log_file = logs_root / "vergegrid-install.log"
     common.set_log_file(str(log_file))
     common.write_log("=== VergeGrid Modular Installer Started ===")
@@ -254,6 +262,11 @@ def main():
         else:
             sys.exit(1)
 
+    # ============================================================
+    # STEP 7: Initialize Windows Services
+    # ============================================================
+    if confirm("Initialize and register Windows services now?"):
+        run_component("init-services.py", title="Windows Service Initializer")
 
     # ============================================================
     # FINAL SUMMARY

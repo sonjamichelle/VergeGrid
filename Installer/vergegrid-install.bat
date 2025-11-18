@@ -104,20 +104,20 @@ if %errorlevel% neq 0 (
 :: ==========================================================
 :: STEP 3.5: Check for existing VergeGrid installation
 :: ==========================================================
-echo [Bootstrap] Checking for existing VergeGrid installation... >> "%LOG%"
-echo Running: python "%SETUPDIR%vergegrid_cleanup.py" >> "%LOG%"
-python "%SETUPDIR%vergegrid_cleanup.py"
-if %errorlevel% equ 99 (
-    echo [Bootstrap INFO] No previous installation detected or user cancelled cleanup. >> "%LOG%"
-) else if %errorlevel% equ 0 (
-    echo [Bootstrap INFO] Cleanup or reset completed successfully. >> "%LOG%"
-) else if %errorlevel% geq 2 (
-    echo [Bootstrap ERROR] Cleanup encountered an error. >> "%LOG%"
-    echo.
-    echo Cleanup process failed. Check cleanup log for details:
-    echo %TEMP%\vergegrid_cleanup.log
-    pause
-)
+:: echo [Bootstrap] Checking for existing VergeGrid installation... >> "%LOG%"
+:: echo Running: python "%SETUPDIR%vergegrid_cleanup.py" >> "%LOG%"
+:: python "%SETUPDIR%vergegrid_cleanup.py"
+:: if %errorlevel% equ 99 (
+::     echo [Bootstrap INFO] No previous installation detected or user cancelled cleanup. >> "%LOG%"
+:: ) else if %errorlevel% equ 0 (
+::     echo [Bootstrap INFO] Cleanup or reset completed successfully. >> "%LOG%"
+:: ) else if %errorlevel% geq 2 (
+::     echo [Bootstrap ERROR] Cleanup encountered an error. >> "%LOG%"
+::     echo.
+::     echo Cleanup process failed. Check cleanup log for details:
+::     echo %TEMP%\vergegrid_cleanup.log
+::     pause
+:: )
 
 :: ==========================================================
 :runinstaller

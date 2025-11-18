@@ -209,8 +209,9 @@ def main():
     # STEP 6: OpenSim (Final Step)
     # ============================================================
     if confirm("Install OpenSim?"):
-        mysql_user = input("MySQL Username [root] JUST PRESS ENTER!: ").strip() or "root"
-        mysql_pass = input("MySQL Password [blank] JUST PRESS ENTER!: ").strip()
+        print("\n[INFO] Using default MySQL credentials (insecure mode)...")
+        mysql_user = "root"
+        mysql_pass = ""
 
         if run_component("fetch-opensim.py", install_root, mysql_user, mysql_pass, title="OpenSim Fetcher"):
             installed.append(("OpenSim", install_root))
@@ -249,6 +250,22 @@ def main():
 
         else:
             sys.exit(1)
+
+
+    # ============================================================
+    # STEP 7: Verify Robust Database
+    # ============================================================
+    if confirm("Run Robust Database Verification?"):
+        print("\n[INFO] Launching database verification utility...")
+        if run_component("verify-db-robust.py", install_root, title="Robust Database Verifier"):
+            common.write_log("[OK] Robust database verified successfully.", "INFO")
+            installed.append(("Database Verification", install_root))
+            print("\n[OK] Database verification completed successfully.\n")
+        else:
+            common.write_log("[FATAL] Database verification failed.", "ERROR")
+            print("[FATAL] Robust database verification failed. Please review the logs.")
+            sys.exit(1)
+
 
     # ============================================================
     # FINAL SUMMARY

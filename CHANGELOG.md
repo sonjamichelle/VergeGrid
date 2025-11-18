@@ -7,6 +7,30 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 ---
 
 
+
+
+## [v0.9.3] – 2025-11-18 04:09
+### 🚀 Added
+- CHANGELOG version entry timestamp.
+
+### 🛠️ Changed
+- Changes this: ## [v0.X.X] - 2025-11-18  to this:  ## [v0.X.X] - 2025-11-18 2155
+
+### 🧱 Internal Improvements
+- more concise.
+
+
+## [v0.9.2] – 2025-11-18
+### 🚀 Added
+- changed the script from a oneline entry into a prompt flow. Parses for last version, suggests new version, asks for description, then changes, then improvements.
+
+### 🛠️ Changed
+- Parses for last version, suggests new version, asks for description, then changes, then improvements.
+
+### 🧱 Internal Improvements
+- Less Guesswork. More passed on information. Less Copy/Paste to do.
+
+
 ## [v0.9.1] – 2025-11-18
 ### 🚀 Added
 - Added bump-changelog.py script

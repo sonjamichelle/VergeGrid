@@ -1,0 +1,118 @@
+GRID MANAGER FEATURE WISHLIST
+Sonja + Nikki Edition
+
+1. Core Server Management
+    • Start and stop Robust
+    • Start and stop regions
+    • Region status indicators
+    • Region logs viewer
+    • Robust logs viewer
+    • System status (CPU, RAM, uptime)
+
+2. Region Tools
+    • Create new region (wizard)
+    • Clone region
+    • Delete region (safe delete)
+    • Move region on grid map
+    • Upload OAR
+    • Download OAR
+    • Auto backup of regions
+    • Region templates (empty, water world, city grid, sandbox)
+
+3. Database Tools
+    • MySQL connection test
+    • Backup database
+    • Restore database
+    • Optimize or vacuum tables
+    • Reset asset tables
+    • Check for corruption or missing prims
+
+4. HyperGrid Tools
+    • Toggle HyperGrid on or off
+    • HyperGrid connectivity test
+    • HyperGrid whitelist or blacklist
+    • HG profile viewer
+    • HG avatar and visitor log inspector
+
+5. Currency Tools
+    Providers
+        • Native internal currency
+        • Gloebit
+        • Podex
+        • Custom provider slot
+
+    Admin
+        • Enable or disable provider
+        • Configure provider keys or endpoints
+        • View economy logs
+        • Reset native balances
+        • Optional merchant tools
+
+6. User Management Tools
+    • Create local grid user
+    • Reset user password
+    • Inspect inventory count
+    • Move user to an estate
+    • Disable or enable user account
+    • View user login history
+    • View last known locations
+    • Clear stuck attachments
+    • Upload IAR
+    • Download IAR
+
+7. Physics and Performance
+    • Select physics engine (BulletSim or PhysX if available)
+    • Crossing smoothing toggle
+    • Region performance report
+    • Physics tuning presets
+    • FPS and TimeDilation monitor
+    • Collision logging toggle
+
+8. Backups and Recovery
+    • One click full grid backup
+    • Weekly automated backups
+    • OAR plus IAR bundle backups
+    • One click restore tool
+    • Snapshot manager
+
+9. Updates and Maintenance
+    • Check for new OpenSim version
+    • Compare configs and show differences
+    • Auto merge configs
+    • Download and upgrade OpenSim
+    • Roll back to previous version
+    • Scheduled region restarts
+    • Cron tasks for Linux
+    • Task Scheduler hooks for Windows
+
+10. Multi Server (Future)
+    • Add host
+    • Remove host
+    • Assign regions to hosts
+    • Host health and ping checks
+    • Remote service control
+    • SSH integration
+    • Remote log collection
+
+11. Security Tools
+    • IP block list
+    • Known griefer block list
+    • Estate wide bans
+    • Viewer restrictions
+    • Map visibility rules
+    • Abuse report viewer
+
+12. Viewer Patches (Separate Project)
+    • Restore 1024 meter draw distance
+    • Stop viewer from resetting draw distance after TP
+    • Crossing stability tweaks
+    • Build Windows or Linux versions if desired
+
+13. Dashboard Widgets
+    • Region map
+    • System load graph
+    • Region performance graph
+    • User online list
+    • HG visitor list
+    • Currency balance graph
+    • Disk space alerts

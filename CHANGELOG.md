@@ -6,43 +6,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ---
 
-
-## [v0.9.9] – 2025-11-18 08:00
-### Added
-- Integrated **automatic Robust verification** into main installer pipeline.
-- Numbered drive selection with free space display and custom folder input.
-- Auto-create `/Downloads` and `/Logs` under installation root.
-
-### Changed
-- Robust verification (`verify-db-robust.py`) now runs automatically, no user prompt.
-- Cleaned redundant logic and indentation in `STEP 6` (OpenSim & Robust setup).
-- Updated installer logs and output formatting for improved clarity.
-
-### Fixed
-- Resolved `IndentationError` from misaligned STEP 6.2 block.
-- Removed duplicate `else` clause causing logical conflicts.
-- Ensured all installer directories and logs initialize properly before execution.
-
-### Developer Notes
-This build finalizes Robust integration and restores the original `select_install_drive()` functionality,
-modernized with numeric drive selection to prevent input errors.
-
-## [v0.9.8] 2025-11-18 VergeGrid Modular Installer Build 2025-11
-### Added
-- Custom installation directory selection: users can now specify both drive and folder name during setup.
-
-### Changed
-- `select_install_drive()` now prompts interactively for folder name instead of defaulting to "VergeGrid".
-- Improved confirmation logic and directory creation flow.
-
-### Fixed
-- Removed hardcoded `VergeGrid` path issue preventing user-defined install locations.
-- Prevented premature exit when user cancels directory confirmation.
-
-### Developer Notes
-- New subdirectories (`Downloads`, `Logs`) are auto-created after confirmation.
-- Cancellation gracefully kills the process tree and exits cleanly.
-
 ## [v0.9.7] – 2025-11-18 06:49 UTC
 
 ### 🛠️ Changed

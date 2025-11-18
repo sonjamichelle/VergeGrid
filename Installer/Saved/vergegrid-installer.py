@@ -2,27 +2,24 @@
 """
 VergeGrid Modular Windows Installer (Python Edition)
 Author: Sonja + GPT
-Purpose:
-  - Top-level orchestrator for modular installers
-  - User-driven drive selection
-  - Calls per-component fetchers (MySQL, OpenSim, Apache, PHP, LetsEncrypt)
-  - Handles sequencing and error management
 """
 
-# --- VergeGrid Path Fix ---
 import os
 import sys
-
-# Find VergeGrid root (one level up from /setup/)
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
-# --- End Fix ---
-
 import subprocess
 import time
 import ctypes
-from pathlib import Path  # ✅ FIXED: Global import to avoid UnboundLocalError
+import psutil
+from pathlib import Path
+
+# --- VergeGrid Path Fix ---
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+# Always work relative to the installer’s directory
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+# --- End Fix ---
 
 try:
     from setup import common
@@ -30,15 +27,38 @@ except ModuleNotFoundError:
     import common
 
 # --------------------------------------------------------------------
-# Auto-install psutil if missing
+# Kill Process Tree
 # --------------------------------------------------------------------
-try:
-    import psutil
-except ImportError:
-    print("[INFO] Missing dependency: psutil. Installing automatically...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
-    subprocess.run([sys.executable, "-m", "pip", "install", "psutil"], check=True)
-    import psutil
+def kill_process_tree(pid=None, include_parent=True):
+    """Kill this process and all its children (for full cancel)."""
+    if pid is None:
+        pid = os.getpid()
+
+    try:
+        parent = psutil.Process(pid)
+        children = parent.children(recursive=True)
+        for p in children:
+            try:
+                p.terminate()
+            except psutil.NoSuchProcess:
+                pass
+
+        gone, alive = psutil.wait_procs(children, timeout=3)
+        for p in alive:
+            try:
+                p.kill()
+            except psutil.NoSuchProcess:
+                pass
+
+        if include_parent:
+            parent.terminate()
+            try:
+                parent.wait(2)
+            except psutil.TimeoutExpired:
+                parent.kill()
+        print("[KILL] Terminated process tree cleanly.")
+    except Exception as e:
+        print(f"[WARN] Process tree termination failed: {e}")
 
 
 # --------------------------------------------------------------------
@@ -58,6 +78,7 @@ def confirm(prompt, default_yes=True):
 
 def select_install_drive():
     print("\nVergeGrid Installer - Drive Selection\n")
+
     drives = [d.device for d in psutil.disk_partitions(all=False)]
     for d in drives:
         try:
@@ -65,15 +86,28 @@ def select_install_drive():
             print(f"  {d} - {usage.free / (1024**3):.2f} GB free")
         except PermissionError:
             pass
+
     choice = input("Enter drive letter for installation (default C): ").strip().upper()
     if not choice:
         choice = "C"
     if not choice.endswith(":"):
         choice += ":"
-    path = os.path.join(choice + "\\", "VergeGrid")
-    print(f"Installation path set to: {path}")
-    if not confirm("Confirm installation path?"):
+
+    folder_name = input("Enter installation folder name (default VergeGrid): ").strip()
+    if not folder_name:
+        folder_name = "VergeGrid"
+
+    path = os.path.join(choice + "\\", folder_name)
+    print(f"\nInstallation path set to: {path}")
+
+    if not confirm("Create and use this path?"):
+        print("[CANCELLED] Installation aborted by user.")
+        kill_process_tree()
         sys.exit(0)
+
+    os.makedirs(os.path.join(path, "Downloads"), exist_ok=True)
+    os.makedirs(os.path.join(path, "Logs"), exist_ok=True)
+    print(f"[OK] Created installation directories under {path}")
     return path
 
 
@@ -96,36 +130,98 @@ def ensure_admin():
 
 
 # --------------------------------------------------------------------
+# Environment Manager Integration
+# --------------------------------------------------------------------
+def find_envmgr():
+    """Locate VergeGrid cleanup manager, supporting dash and underscore names, relative to this script."""
+    base = Path(__file__).parent.resolve()
+    possible_names = ["vergegrid_cleanup.py", "vergegrid-cleanup.py"]
+    search_paths = [
+        base,
+        base / "setup",
+        base.parent / "setup",
+        base.parent,
+    ]
+    for name in possible_names:
+        for base_path in search_paths:
+            candidate = base_path / name
+            if candidate.exists():
+                print(f"[DEBUG] Found Environment Manager at {candidate}")
+                return candidate
+    print("[DEBUG] Environment Manager not found in expected paths.")
+    return None
+
+
+def run_envmgr():
+    """Runs vergegrid-cleanup.py safely and stops the installer if cancelled."""
+    envmgr_path = find_envmgr()
+    if not envmgr_path:
+        print("[FATAL] Environment Manager not found. Cannot continue installation safely.")
+        sys.exit(1)
+
+    print(f"\n>>> Checking for existing VergeGrid installation using {envmgr_path} ...")
+    # Interactive subprocess — allows input/output passthrough
+    result = subprocess.run([sys.executable, str(envmgr_path)], text=True)
+
+    stdout = result.stdout if hasattr(result, "stdout") else ""
+    code = result.returncode
+
+    # Detect explicit cancel or exit code 111
+    if "::VERGEGRID_CANCELLED::" in (stdout or "") or code == 111:
+        print("\n[INFO] Environment Manager reported user cancellation.")
+        print("[EXIT] Installer stopped per user request.\n")
+        kill_process_tree()
+        sys.exit(0)
+    elif code != 0:
+        print(f"\n[WARN] Environment Manager exited with code {code}.")
+        print("[WARN] Continuing installation, but review the cleanup log.")
+    else:
+        print("[OK] Environment Manager completed successfully.\n")
+
+
+# --------------------------------------------------------------------
 # Component Runner
 # --------------------------------------------------------------------
 def run_component(script_name, *args, title=None):
-    """
-    Calls a modular component (fetcher) script via subprocess.
-    Logs output, exit code, and checks for failure.
-    """
+    """Run a VergeGrid setup component via subprocess."""
     if title:
         print(f"\n>>> Running {title} ...")
         print("=" * 70)
-    script_path = Path("setup") / script_name
-    if not script_path.exists():
-        print(f"[ERROR] Missing component: {script_path}")
-        common.write_log(f"[ERROR] Missing component: {script_path}")
-        return False
+
+    possible_paths = [
+        Path("setup") / script_name,
+        Path(__file__).parent / "setup" / script_name,
+        Path(__file__).parent / script_name,
+    ]
+    script_path = next((p for p in possible_paths if p.exists()), None)
+
+    if not script_path:
+        print(f"[FATAL] Missing component: {script_name}")
+        common.write_log(f"[FATAL] Missing component: {script_name}")
+        kill_process_tree()
+        sys.exit(1)
 
     cmd = [sys.executable, str(script_path)] + list(args)
-    result = subprocess.run(cmd)
+    result = subprocess.run(cmd, capture_output=True, text=True)
 
-    exit_code = result.returncode
-    status = "SUCCESS" if exit_code == 0 else "FAIL"
+    stdout = result.stdout or ""
+    code = result.returncode
+    status = "SUCCESS" if code == 0 else "FAIL"
 
-    # Log and print results
-    print(f"\n[{status}] {title or script_name} exited with code {exit_code}\n")
-    common.write_log(f"[{status}] {title or script_name} exited with code {exit_code}")
+    print(stdout)
+    print(f"\n[{status}] {title or script_name} exited with code {code}\n")
+    common.write_log(f"[{status}] {title or script_name} exited with code {code}")
 
-    if exit_code != 0:
-        print(f"[FAIL] {title or script_name} failed (exit code {exit_code}).")
+    if "::VERGEGRID_CANCELLED::" in stdout or code == 111:
+        print("[INFO] User cancelled operation — halting installer.")
+        kill_process_tree()
+        sys.exit(0)
+
+    if code != 0:
+        print(f"[FAIL] {title or script_name} failed (exit code {code}).")
         print("Check VergeGrid logs for details.")
-        return False
+        kill_process_tree()
+        sys.exit(code)
 
     print(f"[OK] {title or script_name} completed successfully.\n")
     return True
@@ -139,6 +235,9 @@ def main():
     print("Author: Sonja + GPT")
     print("Version: Modular Installer Build 2025-11\n")
 
+    # 🔧 Run Environment Manager check first
+    run_envmgr()
+
     install_root = select_install_drive()
     downloads_root = Path(install_root) / "Downloads"
     logs_root = Path(install_root) / "Logs"
@@ -146,7 +245,6 @@ def main():
     os.makedirs(downloads_root, exist_ok=True)
     os.makedirs(logs_root, exist_ok=True)
 
-    # Setup unified log for all components
     log_file = logs_root / "vergegrid-install.log"
     common.set_log_file(str(log_file))
     common.write_log("=== VergeGrid Modular Installer Started ===")
@@ -209,8 +307,12 @@ def main():
     # STEP 6: OpenSim (Final Step)
     # ============================================================
     if confirm("Install OpenSim?"):
+<<<<<<<< HEAD:Installer/Saved/vergegrid-installer.py
         #mysql_user = input("MySQL Username [root] JUST PRESS ENTER!: ").strip() or "root"
         #mysql_pass = input("MySQL Password [blank] JUST PRESS ENTER!: ").strip()
+========
+        print("\n[INFO] Using default MySQL credentials (insecure mode)...")
+>>>>>>>> 623548e511e03018de50dd5ec743806d7496a435:Installer/vergegrid-installer.py
         mysql_user = "root"
         mysql_pass = ""
 
@@ -253,6 +355,23 @@ def main():
             sys.exit(1)
 
     # ============================================================
+<<<<<<<< HEAD:Installer/Saved/vergegrid-installer.py
+========
+    # STEP 7: Verify Robust Database
+    # ============================================================
+    if confirm("Run Robust Database Verification?"):
+        print("\n[INFO] Launching database verification utility...")
+        if run_component("verify-db-robust.py", install_root, title="Robust Database Verifier"):
+            common.write_log("[OK] Robust database verified successfully.", "INFO")
+            installed.append(("Database Verification", install_root))
+            print("\n[OK] Database verification completed successfully.\n")
+        else:
+            common.write_log("[FATAL] Database verification failed.", "ERROR")
+            print("[FATAL] Robust database verification failed. Please review the logs.")
+            sys.exit(1)
+
+    # ============================================================
+>>>>>>>> 623548e511e03018de50dd5ec743806d7496a435:Installer/vergegrid-installer.py
     # FINAL SUMMARY
     # ============================================================
     print("\n" + "=" * 70)

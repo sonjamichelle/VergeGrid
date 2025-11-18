@@ -2,14 +2,8 @@
 """
 VergeGrid Modular Windows Installer (Python Edition)
 Author: Sonja + GPT
-Purpose:
-  - Top-level orchestrator for modular installers
-  - User-driven drive selection
-  - Calls per-component fetchers (MySQL, OpenSim, Apache, PHP, LetsEncrypt)
-  - Handles sequencing and error management
 """
 
-# --- VergeGrid Path Fix ---
 import os
 import sys
 import subprocess
@@ -18,17 +12,19 @@ import ctypes
 import psutil
 from pathlib import Path
 
-# Find VergeGrid root (one level up from /setup/)
+# --- VergeGrid Path Fix ---
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
+
+# Always work relative to the installer’s directory
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 # --- End Fix ---
 
 try:
     from setup import common
 except ModuleNotFoundError:
     import common
-
 
 # --------------------------------------------------------------------
 # Kill Process Tree
@@ -137,47 +133,48 @@ def ensure_admin():
 # Environment Manager Integration
 # --------------------------------------------------------------------
 def find_envmgr():
-    """Locate vergegrid-cleanup.py reliably in multiple locations."""
+    """Locate VergeGrid cleanup manager, supporting dash and underscore names, relative to this script."""
+    base = Path(__file__).parent.resolve()
+    possible_names = ["vergegrid_cleanup.py", "vergegrid-cleanup.py"]
     search_paths = [
-        Path(__file__).parent / "vergegrid-cleanup.py",
-        Path(__file__).parent / "setup" / "vergegrid-cleanup.py",
-        Path(__file__).parent.parent / "setup" / "vergegrid-cleanup.py",
-        Path(__file__).parent.parent / "vergegrid-cleanup.py"
+        base,
+        base / "setup",
+        base.parent / "setup",
+        base.parent,
     ]
-    for p in search_paths:
-        if p.exists():
-            return p.resolve()
+    for name in possible_names:
+        for base_path in search_paths:
+            candidate = base_path / name
+            if candidate.exists():
+                print(f"[DEBUG] Found Environment Manager at {candidate}")
+                return candidate
+    print("[DEBUG] Environment Manager not found in expected paths.")
     return None
 
 
 def run_envmgr():
-    """Run the Environment Manager, handle cancellation instantly."""
+    """Runs vergegrid-cleanup.py safely and stops the installer if cancelled."""
     envmgr_path = find_envmgr()
     if not envmgr_path:
-        print("[FATAL] Environment Manager (vergegrid-cleanup.py) not found.")
-        print("Cannot safely continue installation.")
-        kill_process_tree()
+        print("[FATAL] Environment Manager not found. Cannot continue installation safely.")
         sys.exit(1)
 
-    print("\n>>> Checking for existing VergeGrid installation...")
-    result = subprocess.run(
-        [sys.executable, str(envmgr_path)],
-        capture_output=True,
-        text=True
-    )
+    print(f"\n>>> Checking for existing VergeGrid installation using {envmgr_path} ...")
+    # Interactive subprocess — allows input/output passthrough
+    result = subprocess.run([sys.executable, str(envmgr_path)], text=True)
 
-    stdout = result.stdout or ""
+    stdout = result.stdout if hasattr(result, "stdout") else ""
     code = result.returncode
 
-    if "::VERGEGRID_CANCELLED::" in stdout or code == 111:
+    # Detect explicit cancel or exit code 111
+    if "::VERGEGRID_CANCELLED::" in (stdout or "") or code == 111:
         print("\n[INFO] Environment Manager reported user cancellation.")
-        print("[EXIT] Stopping entire installation process per user request.\n")
+        print("[EXIT] Installer stopped per user request.\n")
         kill_process_tree()
         sys.exit(0)
     elif code != 0:
         print(f"\n[WARN] Environment Manager exited with code {code}.")
-        print("Output:\n" + stdout)
-        print("[WARN] Continuing installation, but check cleanup log.")
+        print("[WARN] Continuing installation, but review the cleanup log.")
     else:
         print("[OK] Environment Manager completed successfully.\n")
 

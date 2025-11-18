@@ -120,6 +120,39 @@ def ensure_admin():
 
 
 # --------------------------------------------------------------------
+# Environment Manager Integration
+# --------------------------------------------------------------------
+def run_envmgr():
+    """Runs vergegrid-cleanup.py safely and stops the installer if cancelled."""
+    envmgr_path = Path("setup") / "vergegrid-cleanup.py"
+    if not envmgr_path.exists():
+        print("[WARN] Environment Manager not found. Skipping cleanup check.")
+        return
+
+    print("\n>>> Checking for existing VergeGrid installation...")
+    result = subprocess.run(
+        [sys.executable, str(envmgr_path)],
+        capture_output=True,
+        text=True
+    )
+
+    stdout = result.stdout
+    code = result.returncode
+
+    if "::VERGEGRID_CANCELLED::" in stdout or code == 111:
+        print("\n[INFO] Environment Manager reported user cancellation.")
+        print("[EXIT] Installer stopped per user request.\n")
+        sys.exit(0)
+    elif code != 0:
+        print(f"\n[WARN] Environment Manager exited with code {code}.")
+        print("Output:")
+        print(stdout)
+        print("[WARN] Continuing installation, but review the cleanup log.")
+    else:
+        print("[OK] Environment Manager completed successfully.\n")
+
+
+# --------------------------------------------------------------------
 # Component Runner
 # --------------------------------------------------------------------
 def run_component(script_name, *args, title=None):
@@ -137,14 +170,20 @@ def run_component(script_name, *args, title=None):
         return False
 
     cmd = [sys.executable, str(script_path)] + list(args)
-    result = subprocess.run(cmd)
+    result = subprocess.run(cmd, capture_output=True, text=True)
 
     exit_code = result.returncode
     status = "SUCCESS" if exit_code == 0 else "FAIL"
 
     # Log and print results
+    print(result.stdout)
     print(f"\n[{status}] {title or script_name} exited with code {exit_code}\n")
     common.write_log(f"[{status}] {title or script_name} exited with code {exit_code}")
+
+    # Detect user cancellation from component scripts
+    if "::VERGEGRID_CANCELLED::" in result.stdout or exit_code == 111:
+        print("[INFO] User cancelled operation — halting installer.")
+        sys.exit(0)
 
     if exit_code != 0:
         print(f"[FAIL] {title or script_name} failed (exit code {exit_code}).")
@@ -162,6 +201,9 @@ def main():
     print("\n=== VergeGrid Modular Installer ===")
     print("Author: Sonja + GPT")
     print("Version: Modular Installer Build 2025-11\n")
+
+    # 🔧 Run Environment Manager check first
+    run_envmgr()
 
     install_root = select_install_drive()
     downloads_root = Path(install_root) / "Downloads"
@@ -275,7 +317,6 @@ def main():
         else:
             sys.exit(1)
 
-
     # ============================================================
     # STEP 7: Verify Robust Database
     # ============================================================
@@ -289,7 +330,6 @@ def main():
             common.write_log("[FATAL] Database verification failed.", "ERROR")
             print("[FATAL] Robust database verification failed. Please review the logs.")
             sys.exit(1)
-
 
     # ============================================================
     # FINAL SUMMARY

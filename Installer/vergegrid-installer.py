@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-VergeGrid Modular Windows Installer (Python Edition)
+VergeGrid Modular Windows Installer (Fully Automated Edition)
 Author: Sonja + GPT
 Purpose:
-  - Top-level orchestrator for modular installers
-  - User-driven drive selection
-  - Calls per-component fetchers (MySQL, OpenSim, Apache, PHP, LetsEncrypt)
-  - Handles sequencing and error management
+  - Fully automated top-level orchestrator for VergeGrid installers
+  - Single confirmation for install path
+  - Automatically installs MySQL, Apache, PHP, OpenSim, and dependencies
+  - Handles sequencing, logging, and error management
   - Auto-generates OpenSim.ini, GridCommon.ini, and GridHypergrid.ini
 """
 
@@ -46,6 +46,7 @@ except ImportError:
 # Helpers
 # --------------------------------------------------------------------
 def confirm(prompt, default_yes=True):
+    """Simple yes/no confirmation."""
     while True:
         d = "[Y/n]" if default_yes else "[y/N]"
         res = input(f"{prompt} {d} ").strip().lower()
@@ -58,7 +59,7 @@ def confirm(prompt, default_yes=True):
 
 
 def select_install_drive():
-    """Prompt user to select an installation drive and custom folder name."""
+    """Prompt user to select installation drive and folder."""
     print("\nVergeGrid Installer - Drive Selection\n")
 
     drives = []
@@ -106,6 +107,7 @@ def select_install_drive():
 
 
 def ensure_admin():
+    """Ensure the installer is running as Administrator."""
     try:
         is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
     except Exception:
@@ -123,14 +125,12 @@ def ensure_admin():
         print("[OK] Admin privileges confirmed.")
 
 
-# --------------------------------------------------------------------
-# Component Runner
-# --------------------------------------------------------------------
 def run_component(script_name, *args, title=None):
-    """Calls a modular component (fetcher) script via subprocess."""
+    """Run a modular component script via subprocess."""
     if title:
         print(f"\n>>> Running {title} ...")
         print("=" * 70)
+
     script_path = Path("setup") / script_name
     if not script_path.exists():
         print(f"[ERROR] Missing component: {script_path}")
@@ -139,19 +139,15 @@ def run_component(script_name, *args, title=None):
 
     cmd = [sys.executable, str(script_path)] + list(args)
     result = subprocess.run(cmd)
-
     exit_code = result.returncode
-    status = "SUCCESS" if exit_code == 0 else "FAIL"
-
-    print(f"\n[{status}] {title or script_name} exited with code {exit_code}\n")
-    common.write_log(f"[{status}] {title or script_name} exited with code {exit_code}")
 
     if exit_code != 0:
         print(f"[FAIL] {title or script_name} failed (exit code {exit_code}).")
-        print("Check VergeGrid logs for details.")
-        return False
+        common.write_log(f"[FAIL] {title or script_name} failed (exit code {exit_code})", "ERROR")
+        sys.exit(exit_code)
 
     print(f"[OK] {title or script_name} completed successfully.\n")
+    common.write_log(f"[OK] {title or script_name} completed successfully.", "INFO")
     return True
 
 
@@ -159,7 +155,7 @@ def run_component(script_name, *args, title=None):
 # Ensure OpenSim.ini, GridCommon.ini, and GridHypergrid.ini
 # --------------------------------------------------------------------
 def ensure_opensim_ini(install_root):
-    """Ensure OpenSim.ini and include files exist and are patched correctly."""
+    """Ensure OpenSim.ini and config-include files exist and are patched correctly."""
     print("\n[INFO] Verifying OpenSim.ini and include files...")
 
     opensim_bin = os.path.join(install_root, "OpenSim", "bin")
@@ -174,7 +170,6 @@ def ensure_opensim_ini(install_root):
     hg_ex = os.path.join(include_dir, "GridHypergrid.ini.example")
     hg_ini = os.path.join(include_dir, "GridHypergrid.ini")
 
-    # --- Step 1: Copy from examples ---
     if not os.path.exists(ini_file) and os.path.exists(ini_example):
         shutil.copy(ini_example, ini_file)
         print("[OK] Created OpenSim.ini from example.")
@@ -185,15 +180,13 @@ def ensure_opensim_ini(install_root):
         shutil.copy(hg_ex, hg_ini)
         print("[OK] Created GridHypergrid.ini from example.")
 
-    # --- Step 2: Patch OpenSim.ini ---
     if not os.path.exists(ini_file):
         print("[FATAL] OpenSim.ini missing and no example available.")
-        return False
+        sys.exit(1)
 
     with open(ini_file, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Ensure includes are uncommented
     content = re.sub(
         r"^\s*;?\s*(Include-Common\s*=\s*\"config-include/GridCommon.ini\")",
         r"\1", content, flags=re.MULTILINE)
@@ -201,15 +194,14 @@ def ensure_opensim_ini(install_root):
         r"^\s*;?\s*(Include-HG\s*=\s*\"config-include/GridHypergrid.ini\")",
         r"\1", content, flags=re.MULTILINE)
 
-    # Add SimulationDataStore if missing (MySQL provider)
     if "[SimulationDataStore]" not in content:
         content += (
             "\n\n[SimulationDataStore]\n"
             "StorageProvider = \"OpenSim.Data.MySQL.dll\"\n"
-            "ConnectionString = \"Data Source=localhost;Database=opensim;User ID=opensim;Password=opensim;Old Guids=true;\"\n"
+            "ConnectionString = \"Data Source=localhost;Database=opensim;"
+            "User ID=opensim;Password=opensim;Old Guids=true;\"\n"
         )
 
-    # Ensure region directory exists in Startup
     if "regionload_regionsdir" not in content:
         content = re.sub(
             r"(\[Startup\][^\[]*)",
@@ -232,7 +224,7 @@ def ensure_opensim_ini(install_root):
 def main():
     print("\n=== VergeGrid Modular Installer ===")
     print("Author: Sonja + GPT")
-    print("Version: Modular Installer Build 2025-11\n")
+    print("Version: Fully Automated Build 2025-11\n")
 
     install_root = select_install_drive()
     downloads_root = Path(install_root) / "Downloads"
@@ -246,171 +238,61 @@ def main():
     install_path_file = setup_dir / "install_path.txt"
     with open(install_path_file, "w", encoding="utf-8") as f:
         f.write(install_root)
+
     print(f"[OK] Saved install path to {install_path_file}")
 
     log_file = logs_root / "vergegrid-install.log"
     common.set_log_file(str(log_file))
-    common.write_log("=== VergeGrid Modular Installer Started ===")
+    common.write_log("=== VergeGrid Fully Automated Installer Started ===")
 
     ensure_admin()
-
-    print("\nConfiguration:")
-    print(f"  Install Root:  {install_root}")
-    print(f"  Logs:          {log_file}")
-    print(f"  Downloads:     {downloads_root}\n")
-
     installed = []
 
-    # ============================================================
-    # STEP 1–5: MySQL → Let's Encrypt
-    # ============================================================
-    if confirm("Install MySQL?"):
-        if run_component("fetch-mysql.py", install_root, title="MySQL Installer"):
-            installed.append(("MySQL", install_root))
-        else:
-            sys.exit(1)
+    print("\n>>> [STEP 1] Installing Core Components (MySQL → Apache → PHP → OpenSim)")
+    print("=" * 70)
 
-    if confirm("Fetch Apache Web Server?"):
-        if run_component("fetch-apache.py", install_root, title="Apache Fetcher"):
-            installed.append(("Apache", install_root))
+    run_component("fetch-mysql.py", install_root, title="MySQL Installer")
+    run_component("fetch-apache.py", install_root, title="Apache Fetcher")
+    run_component("fetch-php.py", install_root, title="PHP Fetcher")
+    run_component("init-apache-php.py", install_root, title="Apache/PHP Integration")
+    run_component("fetch-letsencrypt.py", install_root, title="Let's Encrypt Installer")
 
-    if confirm("Fetch PHP Interpreter?"):
-        if run_component("fetch-php.py", install_root, title="PHP Fetcher"):
-            installed.append(("PHP", install_root))
+    print("\n>>> [STEP 2] Installing and Configuring OpenSim")
+    print("=" * 70)
 
-    if confirm("Initialize Apache/PHP Integration?"):
-        if run_component("init-apache-php.py", install_root, title="Apache/PHP Integration"):
-            installed.append(("Apache-PHP Stack", install_root))
+    mysql_user, mysql_pass = "root", ""
+    run_component("fetch-opensim.py", install_root, mysql_user, mysql_pass, title="OpenSim Fetcher")
 
-    if confirm("Install Let's Encrypt (Windows ACME) Support?"):
-        if run_component("fetch-letsencrypt.py", install_root, title="Let's Encrypt Installer"):
-            installed.append(("LetsEncrypt", install_root))
+    if not ensure_opensim_ini(install_root):
+        sys.exit(1)
 
-    # ============================================================
-    # STEP 6: Install and Initialize OpenSim
-    # ============================================================
-    if confirm("Install OpenSim?"):
-        mysql_user = "root"
-        mysql_pass = ""
+    run_component("init-opensim.py", install_root, mysql_user, mysql_pass, title="OpenSim Initializer")
+    run_component("init-core.py", install_root, title="Core OpenSim Configuration")
+    run_component("verify-db-robust.py", install_root, title="Robust Database Verifier")
 
-        if run_component("fetch-opensim.py", install_root, mysql_user, mysql_pass, title="OpenSim Fetcher"):
-            installed.append(("OpenSim", install_root))
+    print("\n>>> [STEP 3] Securing MySQL and Configuring Grid User")
+    print("=" * 70)
+    run_component("secure_mysql_root.py", install_root, title="MySQL Root Security Setup")
+    run_component("create_god_user_db.py", install_root, title="VergeGrid God User Creator")
 
-            # Create OpenSim.ini, GridCommon.ini, and GridHypergrid.ini
-            if not ensure_opensim_ini(install_root):
-                print("[FATAL] Failed to verify or create OpenSim.ini and include files. Aborting installation.")
-                sys.exit(1)
+    print("\n>>> [STEP 4] Initializing Default Landing Region")
+    print("=" * 70)
+    run_component("init-landing.py", install_root, title="Landing Estate Initializer")
 
-            if run_component("init-opensim.py", install_root, mysql_user, mysql_pass, title="OpenSim Initializer"):
-                common.write_log("[OK] OpenSim base configuration completed successfully.", "INFO")
-            else:
-                common.write_log("[FATAL] OpenSim initialization failed.", "ERROR")
-                sys.exit(1)
+    print("\nAll automated installation steps completed successfully.")
+    print("You can now manually launch OpenSim if desired:")
+    print(r"   OpenSim.exe -inifile=Regions\Landings\Landings.ini\n")
 
-            # STEP 6.2: Initialize Core OpenSim Configuration
-            print("\n[INFO] Performing OpenSim core configuration checks...\n")
-
-            if run_component("init-core.py", install_root, title="Core OpenSim Configuration"):
-                installed.append(("Core OpenSim Config", install_root))
-                common.write_log("[OK] Core OpenSim configuration verified.", "INFO")
-                print("[OK] Core OpenSim configuration verified.\n")
-            else:
-                print("[FATAL] Core OpenSim configuration failed. Aborting installation.")
-                common.write_log("[FATAL] Core OpenSim configuration failed.", "ERROR")
-                sys.exit(1)
-
-            # STEP 6.3: Launch and Verify Robust Database
-            print("\n[INFO] Starting automatic Robust verification and schema test...\n")
-            if run_component("verify-db-robust.py", install_root, title="Robust Database Verifier"):
-                print("[OK] Robust verification and service setup completed successfully.\n")
-                common.write_log("[OK] Robust verification completed successfully.", "INFO")
-                installed.append(("Robust Verification", install_root))
-            else:
-                print("[FATAL] Robust verification failed — manual inspection required.")
-                common.write_log("[FATAL] Robust verification failed.", "ERROR")
-                sys.exit(1)
-
-            print("\n[OK] OpenSim + Robust registration completed successfully.\n")
-
-        else:
-            sys.exit(1)
-
-    # ============================================================
-    # STEP 7: Secure MySQL Root User
-    # ============================================================
-    if confirm("Secure MySQL root user now?"):
-        print("\n[INFO] Initiating MySQL root password security setup...\n")
-
-        if run_component("secure_mysql_root.py", install_root, title="MySQL Root Security Setup"):
-            installed.append(("MySQL Security", install_root))
-            common.write_log("[OK] MySQL root password secured successfully.", "INFO")
-            print("[OK] MySQL root password secured successfully.\n")
-        else:
-            print("[FATAL] MySQL security setup failed. Aborting installation.")
-            common.write_log("[FATAL] MySQL security setup failed.", "ERROR")
-            sys.exit(1)
-
-    # ============================================================
-    # STEP 8: Create VergeGrid God User
-    # ============================================================
-    if confirm("Create initial God (grid admin) user now?"):
-        print("\n[INFO] Launching God user database provisioning utility...\n")
-
-        if run_component("create_god_user_db.py", install_root, title="VergeGrid God User Creator"):
-            installed.append(("God User", install_root))
-            common.write_log("[OK] VergeGrid God user created successfully.", "INFO")
-            print("[OK] VergeGrid God user created successfully.\n")
-        else:
-            print("[FATAL] God user creation failed. Aborting installation.")
-            common.write_log("[FATAL] God user creation failed.", "ERROR")
-            sys.exit(1)
-
-    # ============================================================
-    # STEP 9: Initialize Landing Estate (Default Region)
-    # ============================================================
-    if confirm("Initialize default Landing estate and first region now?"):
-        print("\n[INFO] Launching VergeGrid Landing Estate initializer...\n")
-
-        if run_component("init-landing.py", install_root, title="Landing Estate Initializer"):
-            installed.append(("Landing Estate", install_root))
-            common.write_log("[OK] Landing estate and initial region created successfully.", "INFO")
-            print("[OK] Landing estate and initial region created successfully.\n")
-            print("You can now start the region manually using:")
-            print(r"   OpenSim.exe -inifile=Regions\Landings\Landings.ini\n")
-        else:
-            print("[FATAL] Landing estate initialization failed. Aborting installation.")
-            common.write_log("[FATAL] Landing estate initialization failed.", "ERROR")
-            sys.exit(1)
-
-    # ============================================================
-    # STEP 10: Optional Region Launch
-    # ============================================================
-    opensim_exe = Path(install_root) / "OpenSim" / "bin" / "OpenSim.exe"
-    if opensim_exe.exists() and confirm("Launch OpenSim now to verify region startup?"):
-        print("\n[INFO] Launching Moonlight Landing region instance...\n")
-        subprocess.Popen(
-            [str(opensim_exe), "-inifile=Regions\\Landings\\Landings.ini"],
-            cwd=str(opensim_exe.parent),
-            creationflags=subprocess.CREATE_NEW_CONSOLE
-        )
-        print("[OK] OpenSim launched in a new console window.\n")
-
-    # ============================================================
-    # FINAL SUMMARY
-    # ============================================================
     print("\n" + "=" * 70)
-    print(" VergeGrid Installation Summary")
+    print(" VergeGrid Automated Installation Summary")
     print("=" * 70)
-    if installed:
-        for name, path in installed:
-            print(f"  {name:<20} -> {path}")
-    else:
-        print("  No components were installed.")
+    print(f"  Install Root:  {install_root}")
+    print(f"  Logs:          {log_file}")
     print("-" * 70)
-    print(f"  Logs saved to:  {log_file}")
-    print("  Shortcuts:      C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\VergeGrid")
+    print("  Status:        ✅ All steps completed without user interaction.")
+    print("  Next:          Launch OpenSim to verify Moonlight Landing region.")
     print("=" * 70)
-    print("\nInstallation complete. You may close this window or launch services via Start Menu.\n")
+    print("\nInstallation complete.\n")
 
 
 # --------------------------------------------------------------------

@@ -6,6 +6,27 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ---
 
+## [0.0.12] – 2025-11-18 1213 - vergegrid-install-py refinements
+### Added
+- Full automation of VergeGrid installer with structured progress output.
+- Automated handling of OpenSim.ini, GridCommon.ini, and GridHypergrid.ini generation.
+- Automatic sequential execution of all core setup scripts without user input.
+
+### Changed
+- Removed all confirmation prompts except the initial install path selection.
+- Core stack installation (MySQL → Apache → PHP → OpenSim) now executes automatically.
+- Added clear step banners ([STEP X]) for better progress visibility.
+- Installer now aborts automatically on any script failure with consistent logging.
+
+### Improved
+- Greatly simplified user experience — complete unattended install flow.
+- Ready for continuous deployment or CI/CD integration.
+- Installation log includes full trace of each executed setup component.
+
+### Notes
+After installation, users can manually launch their simulator with:
+
+
 ## [v0.0.11] – 2025-11-18 1203 - OpenSim.Exe Prep
 ### Added
 - `init-core.py`: Core OpenSim configuration validator and patcher.

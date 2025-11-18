@@ -1,0 +1,75 @@
+# ==============================================================
+# VergeGrid Installer - Git Ignore Rules
+# Secure excludes for Windows installer + OpenSim setup environment
+# ==============================================================
+
+# --- Python cache and build artifacts ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+*.spec
+build/
+dist/
+
+# --- Environment and dependencies ---
+.env
+.venv/
+venv/
+env/
+Pipfile.lock
+poetry.lock
+
+# --- Windows-specific system files ---
+Thumbs.db
+desktop.ini
+*.lnk
+
+# --- Logs and installer outputs ---
+vergegrid_install.log
+vergegrid-bootstrap.log
+Logs/
+*.log
+*.bak
+*.old
+*.tmp
+
+# --- Credentials and private configuration ---
+creds.conf
+install_path.txt
+config.ini
+secrets.json
+*.pem
+*.key
+*.crt
+
+# --- Downloads, temp packages, and installers ---
+Downloads/
+Temp/
+*.zip
+*.7z
+*.tar.gz
+*.msi
+*.exe
+
+# --- OpenSim runtime data ---
+OpenSim/bin/config-include/GridCommon.ini~
+OpenSim/bin/Robust.ini~
+OpenSim/bin/Robust.HG.ini~
+OpenSim/logs/
+OpenSim/cache/
+OpenSim/*.db
+OpenSim/*.db-journal
+
+# --- IDE metadata ---
+.vscode/
+.idea/
+*.iml
+*.swp
+
+# --- Backup or local testing artifacts ---
+test_*.py
+*.bak
+*.backup

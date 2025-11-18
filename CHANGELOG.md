@@ -6,6 +6,26 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ---
 
+## [v0.9.9] – 2025-11-18 0933 Secure Mysql
+
+### Added
+- `secure_mysql_root.py` major upgrade:
+  - Automates creation of MySQL service users (`vergeadmin`, `robustuser`, `opensimuser`)
+  - Implements strong password policy enforcement and confirmation
+  - Writes hashed credentials to `creds.conf` for secure offline storage
+  - Automatically patches OpenSim configuration files:
+    - `GridCommon.ini`
+    - `Robust.ini`
+    - `Robust.HG.ini`
+  - Self-installs missing `mysql-connector-python`
+  - Comprehensive logging and error handling for Windows environment
+### Changed
+- Replaced manual MySQL setup with full automated hardening phase (Step 7 integration)
+### Security
+- Root password protection + strict least-privilege database roles
+- All credentials now stored SHA-256 hashed
+
+
 ##  [v0.9.8] [2025-11-18] VergeGrid Installer — Build 2025.11.18a
 
 ### ✨ Added

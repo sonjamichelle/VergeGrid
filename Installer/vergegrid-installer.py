@@ -263,10 +263,29 @@ def main():
             sys.exit(1)
 
     # ============================================================
-    # STEP 7: Initialize Windows Services
+    # STEP 7: Secure MySQL Root User (NEW)
     # ============================================================
+    if confirm("Secure MySQL root user now?"):
+        print("\n[INFO] Initiating MySQL root password security setup...\n")
+
+        if run_component("secure_mysql_root.py", install_root, title="MySQL Root Security Setup"):
+            installed.append(("MySQL Security", install_root))
+            common.write_log("[OK] MySQL root password secured successfully.", "INFO")
+            print("[OK] MySQL root password secured successfully.\n")
+        else:
+            print("[FATAL] MySQL security setup failed. Aborting installation.")
+            common.write_log("[FATAL] MySQL security setup failed.", "ERROR")
+            sys.exit(1)
+
+    # ============================================================
+    # STEP XX (OLD STEP 7): Initialize Windows Services
+    # ============================================================
+    """
+    # [DISABLED] Original Step 7 temporarily renamed to Step XX.
+    # Uncomment this section once service registration is ready.
     if confirm("Initialize and register Windows services now?"):
         run_component("init-services.py", title="Windows Service Initializer")
+    """
 
     # ============================================================
     # FINAL SUMMARY

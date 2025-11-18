@@ -191,6 +191,10 @@ def create_god_user(first, last, email, password, debug=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="VergeGrid God User Creator")
     parser.add_argument("--debug", action="store_true", help="Enable verbose debug output")
+
+    # ✅ Allow installer or wrapper to pass arbitrary extra args (e.g. install_root)
+    parser.add_argument("extra_args", nargs="*", help=argparse.SUPPRESS)
+
     args = parser.parse_args()
 
     first, last, email, pw = collect_user_info()

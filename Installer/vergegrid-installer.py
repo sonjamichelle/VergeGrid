@@ -58,6 +58,8 @@ def confirm(prompt, default_yes=True):
 
 def select_install_drive():
     print("\nVergeGrid Installer - Drive Selection\n")
+
+    # List all detected drives
     drives = [d.device for d in psutil.disk_partitions(all=False)]
     for d in drives:
         try:
@@ -65,15 +67,37 @@ def select_install_drive():
             print(f"  {d} - {usage.free / (1024**3):.2f} GB free")
         except PermissionError:
             pass
+
+    # Ask for drive letter
     choice = input("Enter drive letter for installation (default C): ").strip().upper()
     if not choice:
         choice = "C"
     if not choice.endswith(":"):
         choice += ":"
-    path = os.path.join(choice + "\\", "VergeGrid")
-    print(f"Installation path set to: {path}")
-    if not confirm("Confirm installation path?"):
+
+    # Ask for installation folder name
+    folder_name = input("Enter installation folder name (default VergeGrid): ").strip()
+    if not folder_name:
+        folder_name = "VergeGrid"
+
+    # Construct final path
+    path = os.path.join(choice + "\\", folder_name)
+    print(f"\nInstallation path set to: {path}")
+
+    # Confirm and create directories
+    if not confirm("Create and use this path?"):
+        print("[INFO] Installation cancelled by user.")
         sys.exit(0)
+
+    # Create main folder + subdirectories
+    try:
+        os.makedirs(os.path.join(path, "Downloads"), exist_ok=True)
+        os.makedirs(os.path.join(path, "Logs"), exist_ok=True)
+        print(f"[OK] Created installation directories under {path}")
+    except Exception as e:
+        print(f"[FATAL] Failed to create directories: {e}")
+        sys.exit(1)
+
     return path
 
 

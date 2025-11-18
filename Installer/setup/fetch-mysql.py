@@ -6,6 +6,7 @@ Purpose:
   - Download and extract MySQL distribution
   - Initialize and configure MySQL service via init-mysql
   - Create Start Menu shortcuts
+  - Write all logs to ./Installer_Logs/fetch-mysql.log
 """
 
 # --- VergeGrid Path Fix ---
@@ -21,9 +22,9 @@ if ROOT_DIR not in sys.path:
 import time
 import subprocess
 import importlib.util
+from datetime import datetime
 from colorama import Fore, Style, init
 init(autoreset=True, strip=False, convert=True)
-
 
 # ------------------------------------------------------------
 # Import shared helpers and init-mysql (path-safe)
@@ -33,7 +34,7 @@ try:
 except ModuleNotFoundError:
     import common
 
-# Force-load init-mysql.py dynamically
+# Dynamically load init-mysql.py
 init_mysql_path = os.path.join(os.path.dirname(__file__), "init-mysql.py")
 spec = importlib.util.spec_from_file_location("init_mysql", init_mysql_path)
 init_mysql = importlib.util.module_from_spec(spec)
@@ -50,6 +51,28 @@ URLS_FALLBACK = {
 }
 
 # ------------------------------------------------------------
+# Centralized Installer_Logs Directory
+# ------------------------------------------------------------
+INSTALLER_LOG_DIR = Path(ROOT_DIR) / "Installer_Logs"
+INSTALLER_LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = INSTALLER_LOG_DIR / "fetch-mysql.log"
+
+def log(msg, color=None):
+    """Write to console and Installer_Logs/fetch-mysql.log."""
+    timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+    formatted = f"{timestamp} {msg}"
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(formatted + "\n")
+    except Exception:
+        pass
+    if color:
+        print(color + msg + Style.RESET_ALL)
+    else:
+        print(msg)
+
+
+# ------------------------------------------------------------
 # MySQL Installer Logic
 # ------------------------------------------------------------
 def install_mysql(install_root):
@@ -57,76 +80,75 @@ def install_mysql(install_root):
     Downloads, extracts, and initializes VergeGrid MySQL.
     Called as: python setup/fetch-mysql.py [install_root]
     """
-
     install_root = Path(install_root).resolve()
     downloads_root = install_root / "Downloads"
-    logs_root = install_root / "Logs"
-
-    os.makedirs(downloads_root, exist_ok=True)
-    os.makedirs(logs_root, exist_ok=True)
-
-    log_file = logs_root / "vergegrid-install.log"
-    common.set_log_file(str(log_file))
-    common.write_log("=== Fetch-MySQL Script Starting ===")
-
     target = install_root / "MySQL"
     zip_path = downloads_root / "mysql.zip"
 
+    os.makedirs(downloads_root, exist_ok=True)
+    os.makedirs(target, exist_ok=True)
+
+    log("=== Fetch-MySQL Script Starting ===", Fore.CYAN)
+    log(f"Install root: {install_root}")
+    log(f"Target directory: {target}")
+    log(f"Log file: {LOG_FILE}")
+
     try:
         # 1. Download MySQL archive
-        print("\n>>> Downloading MySQL distribution...")
+        log(">>> Downloading MySQL distribution...", Fore.YELLOW)
         common.download_file(URLS["mysql"], str(zip_path), fallback_url=URLS_FALLBACK["mysql"])
+        log(f"[OK] MySQL package downloaded to {zip_path}", Fore.GREEN)
 
         # 2. Extract MySQL
-        print("\n>>> Extracting MySQL package...")
+        log(">>> Extracting MySQL package...", Fore.YELLOW)
         common.extract_archive(str(zip_path), str(target))
         common.flatten_extracted_dir(str(target), expected="mysql-8.4.6-winx64")
+        log(f"[OK] MySQL extracted to {target}", Fore.GREEN)
 
         # --- Fix nested MySQL directories automatically ---
         nested = target / "MySQL"
         if nested.exists() and (nested / "bin" / "mysqld.exe").exists():
-            print(f"[FIX] Detected nested MySQL directory: {nested}")
+            log(f"[FIX] Detected nested MySQL directory: {nested}", Fore.YELLOW)
             for item in nested.iterdir():
                 dest = target / item.name
                 if not dest.exists():
-                    common.write_log(f"Moving {item} → {dest}")
+                    log(f"Moving {item} → {dest}")
                     item.rename(dest)
             import shutil
             shutil.rmtree(nested, ignore_errors=True)
-            common.write_log(f"[FIX] Corrected nested MySQL structure in {target}")
+            log(f"[FIX] Corrected nested MySQL structure in {target}", Fore.GREEN)
 
         # 3. Initialize MySQL (via init-mysql)
-        print("\n>>> Initializing MySQL service and data directory...")
+        log(">>> Initializing MySQL service and data directory...", Fore.YELLOW)
         sys.stdout.flush()
 
-        # Run secure init process
-        common.write_log("Initializing MySQL (secure mode, temporary password will be generated)...")
+        log("Initializing MySQL (secure mode)...", Fore.CYAN)
         ok = init_mysql.setup_mysql(target)
 
-        # Add detailed log handoff
-        common.write_log("MySQL temporary password parsed successfully, proceeding with secure root password configuration.")
-
         if not ok:
-            common.write_log("[FATAL] init-mysql returned failure. Aborting.", "ERROR")
+            log("[FATAL] init-mysql returned failure. Aborting.", Fore.RED)
             print("[FATAL] MySQL setup failed.")
             sys.exit(2)
 
+        log("MySQL temporary password parsed successfully.", Fore.GREEN)
+
         # 4. Create Start Menu shortcuts
-        print("\n>>> Creating service shortcuts...")
+        log(">>> Creating MySQL service shortcuts...", Fore.YELLOW)
         common.create_shortcut("Start VergeGrid MySQL", "sc start VergeGridMySQL")
         common.create_shortcut("Stop VergeGrid MySQL", "sc stop VergeGridMySQL")
         common.create_shortcut("Restart VergeGrid MySQL", "sc stop VergeGridMySQL && sc start VergeGridMySQL")
+        log("[OK] Service shortcuts created successfully.", Fore.GREEN)
 
         # 5. Done
-        common.write_log(f"MySQL installed successfully in {target}")
-        print("✓ VergeGrid MySQL installation completed.\n")
+        log(f"MySQL installed successfully in {target}", Fore.GREEN)
+        print(Style.BRIGHT + Fore.GREEN + "✓ VergeGrid MySQL installation completed.\n")
         sys.exit(0)
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        common.write_log(f"[FATAL] Exception during MySQL install: {e}", "ERROR")
-        print("\n[FATAL] MySQL installation failed. See logs for details.")
+        log(f"[FATAL] Exception during MySQL install: {e}", Fore.RED)
+        print(Fore.RED + "\n[FATAL] MySQL installation failed. See logs for details.")
         sys.exit(1)
 
 

@@ -1,190 +1,183 @@
 #!/usr/bin/env python3
 """
 VergeGrid Region Bootstrap (create-region.py)
-Automatically creates the default Landing region and estate.
-Assigns the estate owner as the God user from the database.
-Used by the VergeGrid installer during first-time setup.
+Corrected to place all files directly under:
+D:\VergeGrid\OpenSim\bin\Regions\
+without nesting another Regions directory.
 """
 
-import configparser
 import os
-import shutil
 import sys
 import uuid
+import shutil
 import mysql.connector
-from cryptography.fernet import Fernet
-from configparser import ConfigParser
 from pathlib import Path
+from configparser import ConfigParser
+from cryptography.fernet import Fernet
+from datetime import datetime
 
-# --- Constants ---
-BASE_DIR = Path(__file__).resolve().parents[1]
-REGIONS_DIR = BASE_DIR / "Regions"
-ACTIVE_DIR = REGIONS_DIR / "Active"
-ARCHIVE_DIR = REGIONS_DIR / "Archive"
-TEMPLATES_DIR = REGIONS_DIR / "Templates"
-REGIONS_INI = REGIONS_DIR / "Regions.ini"
+# --- Detect Install Root ---
+SETUP_DIR = Path(__file__).resolve().parent
+INSTALL_PATH_FILE = SETUP_DIR / "install_path.txt"
 
-# Default region parameters
+if INSTALL_PATH_FILE.exists():
+    INSTALL_ROOT = Path(INSTALL_PATH_FILE.read_text(encoding="utf-8").strip())
+else:
+    print("[WARN] install_path.txt not found. Using current working directory.")
+    INSTALL_ROOT = Path.cwd()
+
+# Base paths
+BIN_DIR = INSTALL_ROOT / "OpenSim" / "bin"
+REGIONS_DIR = BIN_DIR / "Regions"
+
+# FIXED: point to ../Templates/Regions so we copy only the correct content level
+TEMPLATES_BASE = (SETUP_DIR.parent / "Templates").resolve()
+TEMPLATES_REGIONS = TEMPLATES_BASE / "Regions"
+
+# Defaults
 DEFAULT_REGION_NAME = "Verge Landing"
 DEFAULT_ESTATE_NAME = "Landings"
-DEFAULT_TEMPLATE = "256_Default.ini"
 DEFAULT_LOCATION = "9300,9300"
 DEFAULT_PORT = "8005"
+DEFAULT_HOSTNAME = "grid.dcwork.space"
 
-# --- Credential Loader ---
-def load_encrypted_credentials(user_key="robustuser", debug=False):
-    """Decrypt VergeGrid MySQL credentials from creds.conf using vault.key."""
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    creds_path = os.path.join(base_dir, "creds.conf")
-    vault_path = os.path.join(base_dir, "vault.key")
-
-    if not os.path.exists(creds_path) or not os.path.exists(vault_path):
-        print("[FATAL] Missing creds.conf or vault.key. Run secure_mysql_root.py first.")
+# ------------------------------------------------------------
+# Credential Loader
+# ------------------------------------------------------------
+def load_encrypted_credentials(user_key="robustuser"):
+    creds_path = SETUP_DIR / "creds.conf"
+    vault_path = SETUP_DIR / "vault.key"
+    if not creds_path.exists() or not vault_path.exists():
+        print("[FATAL] Missing creds.conf or vault.key.")
         sys.exit(1)
-
-    # Load AES key
     with open(vault_path, "rb") as f:
         key = f.read()
     fernet = Fernet(key)
-
-    # Read encrypted credentials
     config = ConfigParser()
     config.read(creds_path, encoding="utf-8")
+    encrypted_pw = config["Encrypted"][user_key]
+    return fernet.decrypt(encrypted_pw.encode()).decode()
 
-    try:
-        encrypted_pw = config["Encrypted"][user_key]
-        decrypted_pw = fernet.decrypt(encrypted_pw.encode()).decode()
-        if debug:
-            print(f"[DEBUG] Successfully decrypted password for '{user_key}'.")
-        return decrypted_pw
-    except Exception as e:
-        print(f"[ERROR] Unable to decrypt {user_key} password: {e}")
+# ------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------
+def copy_region_templates():
+    """Copy only the contents of Templates/Regions into bin/Regions."""
+    if not TEMPLATES_REGIONS.exists():
+        print(f"[FATAL] Missing expected template folder: {TEMPLATES_REGIONS}")
         sys.exit(1)
+    REGIONS_DIR.mkdir(parents=True, exist_ok=True)
 
-# --- Helper functions ---
-def ensure_dirs():
-    """Ensure region directory structure exists."""
-    for d in [REGIONS_DIR, ACTIVE_DIR, ARCHIVE_DIR, TEMPLATES_DIR]:
-        d.mkdir(parents=True, exist_ok=True)
+    print(f"[INFO] Copying region templates from {TEMPLATES_REGIONS} → {REGIONS_DIR}")
+    for item in TEMPLATES_REGIONS.iterdir():
+        target = REGIONS_DIR / item.name
+        if item.is_dir():
+            shutil.copytree(item, target, dirs_exist_ok=True)
+        else:
+            shutil.copy2(item, target)
+    print("[OK] Region templates deployed to correct path.")
 
-    if not REGIONS_INI.exists():
-        with open(REGIONS_INI, "w", encoding="utf-8") as f:
-            f.write("[Regions]\n")
-
-    # Ensure default template exists
-    default_template = TEMPLATES_DIR / DEFAULT_TEMPLATE
-    if not default_template.exists():
-        default_template.write_text(
-            """[Region]
-RegionName = DefaultRegion
-RegionUUID = AUTO
-Location = 1000,1000
-InternalAddress = 0.0.0.0
-InternalPort = 9000
-AllowAlternatePorts = False
-ExternalHostName = SYSTEMIP
-""",
-            encoding="utf-8",
-        )
+def rename_template_files(base_path, old_name, new_name):
+    """Rename all files and folders with the old region name."""
+    for root, dirs, files in os.walk(base_path, topdown=False):
+        for fname in files:
+            if old_name in fname:
+                old_file = Path(root) / fname
+                new_file = Path(root) / fname.replace(old_name, new_name)
+                old_file.rename(new_file)
+        for dname in dirs:
+            if old_name in dname:
+                old_dir = Path(root) / dname
+                new_dir = Path(root) / dname.replace(old_name, new_name)
+                old_dir.rename(new_dir)
 
 def generate_uuid():
     return str(uuid.uuid4())
 
-def read_regions():
-    cfg = configparser.ConfigParser()
-    cfg.read(REGIONS_INI, encoding="utf-8")
-    if "Regions" not in cfg:
-        cfg["Regions"] = {}
-    return cfg
-
-def write_regions(cfg):
-    with open(REGIONS_INI, "w", encoding="utf-8") as f:
-        cfg.write(f)
-
-def get_god_user(debug=False):
-    """Fetch the first God user (UserLevel >= 250) from the robust DB using decrypted creds."""
+def get_god_user():
+    """Fetch the first God user (UserLevel >= 250)."""
     mysql_user = "robustuser"
-    mysql_pw = load_encrypted_credentials("robustuser", debug=debug)
-    mysql_db = "robust"
-
+    mysql_pw = load_encrypted_credentials("robustuser")
     try:
         conn = mysql.connector.connect(
-            host="localhost",
-            user=mysql_user,
-            password=mysql_pw,
-            database=mysql_db
+            host="localhost", user=mysql_user, password=mysql_pw, database="robust"
         )
         cursor = conn.cursor()
-        cursor.execute("SELECT PrincipalID, FirstName, LastName FROM useraccounts WHERE UserLevel >= 250 LIMIT 1;")
+        cursor.execute(
+            "SELECT PrincipalID, FirstName, LastName FROM useraccounts WHERE UserLevel >= 250 LIMIT 1;"
+        )
         row = cursor.fetchone()
         cursor.close()
         conn.close()
-
         if row:
             pid, first, last = row
             return pid, f"{first} {last}"
-        else:
-            return None, None
     except Exception as e:
         print(f"[WARN] Could not fetch God user: {e}")
-        return None, None
+    return None, None
 
-def create_default_region():
-    """Automatically create Verge Landing region and estate."""
-    ensure_dirs()
+def substitute_placeholders(file_path, replacements):
+    """Replace placeholders and old text inside template files."""
+    text = file_path.read_text(encoding="utf-8", errors="ignore")
+    for key, value in replacements.items():
+        text = text.replace(f"{{{key}}}", str(value))
+    text = text.replace("Moonlight Landing", replacements["REGION_NAME"])
+    text = text.replace("Moonlight Landing II", replacements["REGION_NAME"])
+    text = text.replace("Landings", replacements["ESTATE_NAME"])
+    file_path.write_text(text, encoding="utf-8")
 
+# ------------------------------------------------------------
+# Main Region Creator
+# ------------------------------------------------------------
+def create_region_structure():
+    print("\n=== VergeGrid Landing Estate Initializer (Automated) ===")
+    print(f"[INFO] Install root: {INSTALL_ROOT}")
+    print(f"[INFO] OpenSim bin directory: {BIN_DIR}")
+    print(f"[INFO] Template source: {TEMPLATES_REGIONS}")
+
+    # Step 1: Copy templates (fixed to copy from Templates/Regions)
+    copy_region_templates()
+
+    # Step 2: Rename default files/folders
+    rename_template_files(REGIONS_DIR, "Moonlight Landing", DEFAULT_REGION_NAME)
+
+    # Step 3: Replace text placeholders
     god_id, god_name = get_god_user()
     if not god_id:
-        print("[WARN] No God user found. Owner will be left blank.")
+        god_id = "00000000-0000-0000-0000-000000000000"
+        god_name = "Unknown User"
 
-    template_path = TEMPLATES_DIR / DEFAULT_TEMPLATE
-    if not template_path.exists():
-        print(f"[FATAL] Missing template file: {template_path}")
-        sys.exit(1)
+    region_uuid = generate_uuid()
+    replacements = {
+        "REGION_NAME": DEFAULT_REGION_NAME,
+        "REGION_UUID": region_uuid,
+        "ESTATE_NAME": DEFAULT_ESTATE_NAME,
+        "ESTATE_OWNER": god_id,
+        "ESTATE_OWNER_NAME": god_name,
+        "LOCATION": DEFAULT_LOCATION,
+        "PORT": DEFAULT_PORT,
+        "HOSTNAME": DEFAULT_HOSTNAME,
+        "DATE": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
 
-    region_path = ACTIVE_DIR / f"{DEFAULT_REGION_NAME}.ini"
-    shutil.copy(template_path, region_path)
+    for root, _, files in os.walk(REGIONS_DIR):
+        for fname in files:
+            if fname.lower().endswith((".ini", ".txt", ".cfg", ".xml", ".log")):
+                substitute_placeholders(Path(root) / fname, replacements)
 
-    content = region_path.read_text(encoding="utf-8")
-    content = content.replace("DefaultRegion", DEFAULT_REGION_NAME)
-    content = content.replace("AUTO", generate_uuid())
-    content = content.replace("1000,1000", DEFAULT_LOCATION)
-    content = content.replace("9000", DEFAULT_PORT)
-    region_path.write_text(content, encoding="utf-8")
+    # Step 4: Write master Regions.ini correctly
+    regions_ini = REGIONS_DIR / "Regions.ini"
+    with open(regions_ini, "w", encoding="utf-8") as f:
+        f.write(f"[Regions]\n{DEFAULT_REGION_NAME} = Landings/Region/{DEFAULT_REGION_NAME}.ini\n")
 
-    cfg = read_regions()
-    cfg["Regions"][DEFAULT_REGION_NAME] = f"Active/{DEFAULT_REGION_NAME}.ini"
-    write_regions(cfg)
+    print(f"[OK] Region UUID: {region_uuid}")
+    print(f"[OK] Owner: {god_name} ({god_id})")
+    print("\n✅ Layout completed successfully!")
+    print(f"   Regions located at: {REGIONS_DIR}")
+    print(f"   Run OpenSim.exe -inifile=Regions/Landings/{DEFAULT_ESTATE_NAME}.ini\n")
 
-    # Estate override file (for DreamGrid-style estates)
-    estate_ini = REGIONS_DIR / "Landings" / f"{DEFAULT_ESTATE_NAME}.ini"
-    estate_ini.parent.mkdir(parents=True, exist_ok=True)
-    estate_ini.write_text(
-        f"""[EstateSettings]
-EstateName = {DEFAULT_ESTATE_NAME}
-EstateOwner = {god_id or '00000000-0000-0000-0000-000000000000'}
-EstateOwnerName = {god_name or 'Unknown User'}
-""",
-        encoding="utf-8",
-    )
-
-    print(f"[OK] Created region configuration: {region_path}")
-    print(f"     Region UUID: {generate_uuid()}")
-    print(f"     Port: {DEFAULT_PORT}")
-    print(f"     Location: {DEFAULT_LOCATION}")
-    print(f"[OK] Created estate override: {estate_ini}")
-
-    if god_id:
-        print(f"[OK] Assigned estate owner: {god_name} ({god_id})")
-
-    print("\n✅ Landing estate fully initialized!")
-    print("   To start your simulator, run:")
-    print(f"   OpenSim.exe -inifile=Regions/Landings/{DEFAULT_ESTATE_NAME}.ini\n")
-
-# --- Main entry ---
-def main():
-    print("\n=== VergeGrid Landing Estate Initializer (Automated) ===")
-    create_default_region()
-
+# ------------------------------------------------------------
+# Entry
+# ------------------------------------------------------------
 if __name__ == "__main__":
-    main()
+    create_region_structure()

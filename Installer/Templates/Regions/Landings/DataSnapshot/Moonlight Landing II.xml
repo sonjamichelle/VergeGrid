@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="Windows-1252"?>
+<region category="PG" entities="347">
+  <info>
+    <uuid>978bc4e7-5d81-4323-9390-313251d8d3dc</uuid>
+    <url>http://www2.moonlightestates.me:8008/</url>
+    <name>Moonlight Landing II</name>
+    <handle>10225458140697856</handle>
+  </info>
+  <grid>
+    <gatekeeperURL>http://www2.moonlightestates.me:8002</gatekeeperURL>
+    <name>Moonlight Estates</name>
+  </grid>
+  <data>
+    <estate>
+      <user>
+        <name>Guv Lepetomane</name>
+        <uuid>577b1856-3f38-4132-a986-6d9e80c463ab</uuid>
+      </user>
+      <name>Moonlight Landings</name>
+      <id>2000</id>
+      <parentid>1</parentid>
+      <flags teleport="True" public="True" />
+    </estate>
+    <parceldata />
+    <objectdata />
+  </data>
+</region>

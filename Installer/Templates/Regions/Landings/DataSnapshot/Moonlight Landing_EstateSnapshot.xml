@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="Windows-1252"?>
+<estate>
+  <user>
+    <name>Guv Lepetomane</name>
+    <uuid>577b1856-3f38-4132-a986-6d9e80c463ab</uuid>
+  </user>
+  <name>Moonlight Landings</name>
+  <id>2000</id>
+  <parentid>1</parentid>
+  <flags teleport="True" public="True" />
+</estate>

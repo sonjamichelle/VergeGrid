@@ -1,0 +1,37 @@
+{
+    ".NET Runtime": {
+        "status": "OK",
+        "details": "8.0.22",
+        "required": true
+    },
+    ".NET SDK": {
+        "status": "OK",
+        "details": "8.0.416",
+        "required": true
+    },
+    "Python": {
+        "status": "OK",
+        "details": "Python 3.11.9",
+        "required": true
+    },
+    "Visual C++ Runtime": {
+        "status": "OK",
+        "details": "C:\\Windows\\System32\\vcruntime140.dll, C:\\Windows\\System32\\vcruntime140_1.dll, C:\\Windows\\System32\\vcruntime140_1_clr0400.dll, C:\\Windows\\System32\\vcruntime140_clr0400.dll, C:\\Windows\\System32\\vcruntime140_threads.dll",
+        "required": true
+    },
+    "Git": {
+        "status": "OK",
+        "details": "git version 2.51.2.windows.1",
+        "required": false
+    },
+    "OpenSSL": {
+        "status": "OK",
+        "details": "OpenSSL 1.1.1q  5 Jul 2022",
+        "required": false
+    },
+    "pip": {
+        "status": "OK",
+        "details": "pip 25.3 from C:\\Python311\\Lib\\site-packages\\pip (python 3.11)",
+        "required": true
+    }
+}

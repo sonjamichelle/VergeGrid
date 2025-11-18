@@ -1,0 +1,95 @@
+Landings
+Guv
+Lepetomane
+Landings
+Landings
+estate shoe
+estate show
+show regions
+change region Moonlight Landing
+load oar e:\OAR\Moonlight_Landing.oar
+load oar e:\OARs\Moonlight_Landing.oar
+change region Moonlight Landing II
+load oar e:\OARs\Moonlight_Landing_II.oar
+save iar -h grid.moonlightestates.me:8002 Guv Lepetomane / E:/MoonlightEstates/OutworldzFiles/Autobackup/IAR\Guv_Lepetomane_2022-03-11_19_52_04.iar
+save iar -h grid.moonlightestates.me:8002 Sonja Galileo / E:/MoonlightEstates/OutworldzFiles/Autobackup/IAR\Sonja_Galileo_2022-03-11_19_52_43.iar
+login enable
+save iar -h grid.moonlightestates.me:8002 Guv Lepetomane / D:/DreamGrid/MoonlightEstates/OutworldzFiles/Autobackup/IAR\Guv_Lepetomane_2022-03-13_13_34_44.iar
+save iar -h grid.moonlightestates.me:8002 Nicole Galileo / D:/DreamGrid/MoonlightEstates/OutworldzFiles/Autobackup/IAR\Nicole_Galileo_2022-03-13_13_43_23.iar
+save iar -h grid.moonlightestates.me:8002 Sonja Galileo / D:/DreamGrid/MoonlightEstates/OutworldzFiles/Autobackup/IAR\Sonja_Galileo_2022-03-13_13_44_05.iar
+save iar -h grid.moonlightestates.me:8002 Sonja Galileo / D:/DreamGrid/MoonlightEstates/OutworldzFiles/Autobackup/IAR\Sonja_Galileo_2022-03-13_16_05_36.iar
+save iar -h grid.moonlightestates.me:8002 Guv Lepetomane / D:/DreamGrid/MoonlightEstates/OutworldzFiles/Autobackup/IAR\Guv_Lepetomane_2022-03-13_17_06_32.iar
+save iar -h grid.moonlightestates.me:8002 Sonja Galileo / D:/DreamGrid/MoonlightEstates/OutworldzFiles/Autobackup/IAR\Sonja_Galileo_2022-03-13_17_06_38.iar
+config show Groups
+config show Groups
+config show Groups
+config show Groups
+config show Groups
+config show Groups
+config show Groups
+Landings
+Guv
+Lepetomane
+Landings
+Landings
+save iar -h grid.moonlightestates.me:8002 Guv Lepetomane / C:/Opensim/Dreamworld/OutworldzFiles/Autobackup/IAR\Guv_Lepetomane_2022-03-14_03_24_01.iar
+change region Moonlight Landing
+load oar c:\OAR\Moonlight_Landing
+load oar c:\OAR\Moonlight_Landing.oar
+change region Moonlight Landing II
+load oar c:\OAR\Moonlight_Landing_II.oar
+save iar -h grid.moonlightestates.me:8002 DaisyJ Tester / E:/Opensim/Dreamworld/OutworldzFiles/Autobackup/IAR\DaisyJ_Tester_2022-03-14_20_55_38.iar
+save iar -h grid.moonlightestates.me:8002 Guv Lepetomane / E:/Opensim/Dreamworld/OutworldzFiles/Autobackup/IAR\Guv_Lepetomane_2022-03-14_20_56_18.iar
+save iar -h grid.moonlightestates.me:8002 Nikki Galileo / E:/Opensim/Dreamworld/OutworldzFiles/Autobackup/IAR\Nikki_Galileo_2022-03-14_20_58_00.iar
+sar  -h grid.moonlightestates.me:8002  Sonja Galileo / "E:/Opensim/Dreamworld/OutworldzFiles/Autobackup/IAR\Sonja_Galileo_2022-03-14_20_58_39.iar"
+change region Moonlight Landing
+load oar e:\OAR\Moonight_Landing.oar
+load oar e:\OAR\Moonlight_Landing.oar
+change region Moonlight Landing II
+Landings
+Guv
+Lepetomane
+Landings
+Landings
+change region Moonlight Landing
+load oar d:\OAR\Moonlight_Landing.oar
+change region Moonlight Landing II
+load oar d:\OAR\Moonlight_Landing_II.oar
+load liar BubbaJ Tester / d:\IAR\fullavatars.iar
+load iar BubbaJ Tester / d:\IAR\fullavatars.iar
+[3/24/2022 5:09 PM]:> login enable
+[3/24/2022 6:04 PM]:> login enable
+[3/27/2022 12:36 PM]:> Moonlight Landings
+[3/27/2022 12:36 PM]:> Guv
+[3/27/2022 12:36 PM]:> Lepetomane
+[3/27/2022 12:36 PM]:> Moonlight Landings
+[3/27/2022 12:36 PM]:> Moonlight Landings
+[3/27/2022 1:24 PM]:> change region Moonlight Landing
+[3/27/2022 1:25 PM]:> load oar d:\OAR\Moonlight_Landing.oar
+[3/27/2022 1:46 PM]:> change region Moonlight Landing II
+[3/27/2022 1:47 PM]:> load oar d:\OAR\Moonlight_Landing_II.oar
+[3/27/2022 5:20 PM]:> save iar -h grid.moonlightesta
+[3/27/2022 5:20 PM]:> save oar "D:/Moonlight_Estates/OutworldzFiles/Autobackup/Mega Sandbox_2022-03-27_17_20_05.oar" save iar -h grid.moonlightestates.me:8002 Nikki Galileo / D:/Moonlight_Estates/OutworldzFiles/Autobackup/IAR\Nikki_Galileo_2022-03-27_17_20_05.iar
+[3/27/2022 5:20 PM]:> change region "Moonlight Estate" save iar -h grid.moonlightestates.me:8002 Sonja Galileo / D:/Moonlight_Estates/OutworldzFiles/Autobackup/IAR\Sonja_Galileo_2022-03-27_17_20_14.iar
+[3/27/2022 5:20 PM]:> save oar "D:/Moonlight_Estates/OutworldzFiles/Autobackup/Moonlight Estate_2022-03-27_17_20_21.oar" save iar -h grid.moonlightestates.me:8002 Wifi Admin / D:/Moonlight_Estates/OutworldzFiles/Autobackup/IAR\Wifi_Admin_2022-03-27_17_20_21.iar
+[3/27/2022 5:21 PM]:> change region "Moonlight Landing"
+[3/27/2022 5:21 PM]:> save oar "D:/Moonlight_Estates/OutworldzFiles/Autobackup/Moonlight Landing_2022-03-27_17_21_24.oar"
+[3/27/2022 5:23 PM]:> change region "Moonlight Landing II"
+[3/27/2022 5:23 PM]:> save oar "D:/Moonlight_Estates/OutworldzFiles/Autobackup/Moonlight Landing II_2022-03-27_17_23_26.oar"
+backup
+show regions
+change region Moonlight Landing
+load oar "d:\oar\Moonlight Landing_2022-03-27_17_21_24.oar"
+change region Moonlight Landing II
+load oar "d:\oar\Moonlight Landing II_2022-03-27_17_23_26.oar"
+load iar Sonja Galileo /IAR d:\iar\sonja.galileo.iar
+change region "Moonlight Landing"
+load iar --merge Nikki Galileo /IAR D:/IAR/Nikki.Galileo.iar
+load iar --merge Nikki Galileo /IAR D:/IAR/Nikki.Galileo.iar
+estate show
+estate set name 101 Landings
+estate show
+help
+estate show
+show regions
+show regions

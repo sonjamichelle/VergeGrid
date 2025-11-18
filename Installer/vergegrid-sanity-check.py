@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 VergeGrid Sanity Checker
@@ -7,6 +8,7 @@ Purpose:
   - Check service registration and process status
   - Confirm MySQL + Robust operational connectivity
   - Summarize results in PASS/FAIL format
+  - Write all logs to ./Installer_Logs/vergegrid-sanity.log
 """
 
 # --- VergeGrid Path Fix ---
@@ -19,51 +21,50 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 # --- End Fix ---
 
-import os
-import sys
 import subprocess
 import psutil
-from pathlib import Path
-import time
+import shutil
 import re
+import time
+from pathlib import Path
+from datetime import datetime
+from colorama import Fore, Style, init
+
+init(autoreset=True)
 
 # ------------------------------------------------------------
-# Configurable Service and Directory Paths
+# Logging Setup — Centralized to ./Installer_Logs
 # ------------------------------------------------------------
-SERVICES = {
-    "MySQL": "VergeGridMySQL",
-    "Robust": "VergeGridRobust",
-    "Apache": "VergeGridApache",
-}
+INSTALLER_LOG_DIR = Path(ROOT_DIR) / "Installer_Logs"
+INSTALLER_LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = INSTALLER_LOG_DIR / "vergegrid-sanity.log"
 
-PROCESSES = {
-    "mysqld.exe": "MySQL Daemon",
-    "Robust.exe": "OpenSim Robust",
-    "httpd.exe": "Apache Web Server",
-}
 
-PATHS = [
-    ("MySQL Root", "MySQL"),
-    ("OpenSim Root", "OpenSim"),
-    ("Apache Root", "Apache"),
-    ("PHP Root", "PHP"),
-    ("Logs Directory", "Logs"),
-    ("Downloads Directory", "Downloads"),
-]
+def log(msg, color=None):
+    """Log to console and append to sanity log file."""
+    timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+    formatted = f"{timestamp} {msg}"
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(formatted + "\n")
+    except Exception:
+        pass
+    if color:
+        print(color + msg + Style.RESET_ALL)
+    else:
+        print(msg)
 
-LOG_FILE = "Logs/vergegrid-install.log"
 
-# ------------------------------------------------------------
-# Helper Functions
-# ------------------------------------------------------------
 def print_section(title):
-    print("\n" + "=" * 70)
-    print(f"  {title}")
-    print("=" * 70)
+    log("\n" + "=" * 70)
+    log(f"  {title}")
+    log("=" * 70)
+
 
 def check_exists(base, sub):
     path = Path(base) / sub
     return path.exists(), str(path)
+
 
 def check_service_status(name):
     try:
@@ -79,11 +80,13 @@ def check_service_status(name):
     except Exception:
         return "ERROR"
 
+
 def check_process_running(exe_name):
     for proc in psutil.process_iter(['name']):
         if proc.info['name'] and proc.info['name'].lower() == exe_name.lower():
             return True
     return False
+
 
 def scan_logs(log_path):
     if not os.path.exists(log_path):
@@ -95,15 +98,39 @@ def scan_logs(log_path):
                 errors.append(line.strip())
     return errors or None
 
+
 # ------------------------------------------------------------
 # Main Sanity Check Routine
 # ------------------------------------------------------------
 def run_sanity_check(install_root):
     install_root = Path(install_root).resolve()
-    print("\n=== VergeGrid Sanity Check ===")
-    print(f"Target installation root: {install_root}\n")
+    log("\n=== VergeGrid Sanity Check ===", Style.BRIGHT)
+    log(f"Target installation root: {install_root}\n", Fore.CYAN)
 
     results = {"services": {}, "processes": {}, "paths": {}, "log_errors": []}
+
+    SERVICES = {
+        "MySQL": "VergeGridMySQL",
+        "Robust": "VergeGridRobust",
+        "Apache": "VergeGridApache",
+    }
+
+    PROCESSES = {
+        "mysqld.exe": "MySQL Daemon",
+        "Robust.exe": "OpenSim Robust",
+        "httpd.exe": "Apache Web Server",
+    }
+
+    PATHS = [
+        ("MySQL Root", "MySQL"),
+        ("OpenSim Root", "OpenSim"),
+        ("Apache Root", "Apache"),
+        ("PHP Root", "PHP"),
+        ("Logs Directory", "Logs"),
+        ("Downloads Directory", "Downloads"),
+    ]
+
+    log_file_relative = "Logs/vergegrid-install.log"
 
     # --------------------------------------------------------
     # 1. Directory Checks
@@ -112,7 +139,8 @@ def run_sanity_check(install_root):
     for label, sub in PATHS:
         ok, path = check_exists(install_root, sub)
         status = "OK" if ok else "MISSING"
-        print(f"{label:<20} -> {path} [{status}]")
+        color = Fore.GREEN if ok else Fore.RED
+        log(f"{label:<20} -> {path} [{status}]", color)
         results["paths"][label] = status
 
     # --------------------------------------------------------
@@ -121,7 +149,8 @@ def run_sanity_check(install_root):
     print_section("Service Status")
     for label, svc in SERVICES.items():
         status = check_service_status(svc)
-        print(f"{label:<10} -> {svc:<20} [{status}]")
+        color = Fore.GREEN if status == "RUNNING" else Fore.YELLOW if status in ("STOPPED", "REGISTERED") else Fore.RED
+        log(f"{label:<10} -> {svc:<20} [{status}]", color)
         results["services"][label] = status
 
     # --------------------------------------------------------
@@ -130,7 +159,8 @@ def run_sanity_check(install_root):
     print_section("Process Verification")
     for exe, label in PROCESSES.items():
         running = check_process_running(exe)
-        print(f"{label:<20} ({exe:<12}) -> [{'RUNNING' if running else 'NOT FOUND'}]")
+        color = Fore.GREEN if running else Fore.RED
+        log(f"{label:<20} ({exe:<12}) -> [{'RUNNING' if running else 'NOT FOUND'}]", color)
         results["processes"][label] = "RUNNING" if running else "NOT FOUND"
 
     # --------------------------------------------------------
@@ -142,30 +172,30 @@ def run_sanity_check(install_root):
         test_cmd = [mysql_exe, "-u", "root", "-e", "SHOW DATABASES;"]
         result = subprocess.run(test_cmd, capture_output=True, text=True, timeout=10)
         if "information_schema" in result.stdout:
-            print("✓ MySQL responded successfully.")
+            log("✓ MySQL responded successfully.", Fore.GREEN)
             results["mysql_ok"] = True
         else:
-            print("[WARN] MySQL command ran but returned no results.")
+            log("[WARN] MySQL command ran but returned no results.", Fore.YELLOW)
             results["mysql_ok"] = False
     except Exception as e:
-        print(f"[FAIL] Could not run MySQL client: {e}")
+        log(f"[FAIL] Could not run MySQL client: {e}", Fore.RED)
         results["mysql_ok"] = False
 
     # --------------------------------------------------------
     # 5. Log File Scan
     # --------------------------------------------------------
     print_section("Log File Scan")
-    log_path = install_root / LOG_FILE
+    log_path = install_root / log_file_relative
     errors = scan_logs(log_path)
     if errors == "MISSING":
-        print("Log file not found.")
+        log("Log file not found.", Fore.YELLOW)
     elif errors:
-        print(f"[WARN] Found {len(errors)} error(s) in install log:")
-        for e in errors[-10:]:  # show last 10
-            print("  " + e)
+        log(f"[WARN] Found {len(errors)} error(s) in install log:", Fore.RED)
+        for e in errors[-10:]:  # last 10
+            log("  " + e)
         results["log_errors"] = errors
     else:
-        print("No errors found in installation logs.")
+        log("No errors found in installation logs.", Fore.GREEN)
 
     # --------------------------------------------------------
     # 6. Final Summary
@@ -180,19 +210,21 @@ def run_sanity_check(install_root):
 
     all_pass = service_pass and process_pass and path_pass and not results["log_errors"]
 
-    print(f"Paths OK:     {path_pass}")
-    print(f"Services OK:  {service_pass}")
-    print(f"Processes OK: {process_pass}")
-    print(f"MySQL OK:     {results.get('mysql_ok', False)}")
-    print(f"Errors Found: {bool(results['log_errors'])}")
+    log(f"Paths OK:     {path_pass}")
+    log(f"Services OK:  {service_pass}")
+    log(f"Processes OK: {process_pass}")
+    log(f"MySQL OK:     {results.get('mysql_ok', False)}")
+    log(f"Errors Found: {bool(results['log_errors'])}")
 
-    print("\nOverall Result: " + ("✅ PASS — VergeGrid stack is healthy!" if all_pass else "❌ FAIL — Issues detected."))
+    if all_pass:
+        log("\n✅ PASS — VergeGrid stack is healthy!", Fore.GREEN)
+    else:
+        log("\n❌ FAIL — Issues detected.", Fore.RED)
+        log("Check detailed logs at:")
+        log("  " + str(log_path))
+        log("and review the Windows Service Manager for stopped or missing VergeGrid services.\n")
 
-    if not all_pass:
-        print("\nCheck detailed logs at:")
-        print("  " + str(log_path))
-        print("and review the Windows Service Manager for stopped or missing VergeGrid services.\n")
-
+    log("\nFull sanity check log written to: " + str(LOG_FILE), Fore.CYAN)
     return all_pass
 
 
@@ -210,5 +242,5 @@ if __name__ == "__main__":
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(f"\n[FATAL] Sanity check failed: {e}")
+        log(f"[FATAL] Sanity check failed: {e}", Fore.RED)
         sys.exit(1)

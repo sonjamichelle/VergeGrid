@@ -1,21 +1,23 @@
 @echo off
 setlocal enabledelayedexpansion
 title VergeGrid Installer Bootstrap
-set LOG=%TEMP%\vergegrid-bootstrap.log
-
-echo [Bootstrap] Starting VergeGrid installer... > "%LOG%"
-echo.
-echo ==========================================================
-echo     VergeGrid Installer Bootstrap
-echo ==========================================================
 
 :: ==========================================================
-:: STEP 0: Set working directory
+:: STEP 0: Set working directory and local log directory
 :: ==========================================================
 set "SETUPDIR=%~dp0"
 cd /d "%SETUPDIR%"
-echo [Bootstrap] Working directory: %SETUPDIR% >> "%LOG%"
+set "LOGDIR=%SETUPDIR%Installer_Logs"
+if not exist "%LOGDIR%" mkdir "%LOGDIR%"
+set "LOG=%LOGDIR%\vergegrid-bootstrap.log"
+
+echo [Bootstrap] Starting VergeGrid installer... > "%LOG%"
+echo ==========================================================
+echo     VergeGrid Installer Bootstrap
+echo ==========================================================
 echo Using setup folder: %SETUPDIR%
+echo Logs will be saved in: %LOGDIR%
+echo [Bootstrap] Log directory initialized at %LOGDIR% >> "%LOG%"
 
 :: ==========================================================
 :: STEP 1: Check / Install Python
@@ -27,125 +29,66 @@ if %errorlevel% equ 0 (
 
     echo [Bootstrap] Python found at: !PYTHON_PATH! >> "%LOG%"
     echo [Bootstrap] Python version: !PYTHON_VER! >> "%LOG%"
-    echo.
-    echo Python detected!
-    echo Location: !PYTHON_PATH!
-    echo Version:  !PYTHON_VER!
+    echo Python detected at !PYTHON_PATH! (version !PYTHON_VER!)
     echo Continuing in 3 seconds...
     timeout /t 3 >nul
     goto :checkdeps
 )
 
-:: If not found, prompt user
-echo.
-echo Python 3.11 (or newer) is required for VergeGrid.
-set /p USERCHOICE=Would you like to install Python 3.12.3 automatically? [Y/N]: 
-if /i "%USERCHOICE%"=="Y" goto :installpython
-if /i "%USERCHOICE%"=="y" goto :installpython
-
-echo.
-echo Python installation declined.
-echo You must install Python 3.11 or newer manually before running this installer.
-echo Installer will now exit.
-echo [Bootstrap] Python installation declined by user. Exiting... >> "%LOG%"
-pause
-exit /b 1
-
-:installpython
-echo [Bootstrap] Python not found. Installing Python 3.12.3... >> "%LOG%"
+echo Python 3.11+ is required. Installing 3.12.3 automatically...
+echo [Bootstrap] Installing Python 3.12.3... >> "%LOG%"
 set "PYTMP=%TEMP%\python_installer.exe"
-echo Downloading Python installer...
 powershell -Command "Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.3/python-3.12.3-amd64.exe' -OutFile '%PYTMP%'"
-echo [Bootstrap] Running silent Python install... >> "%LOG%"
 start /wait "" "%PYTMP%" /quiet InstallAllUsers=1 PrependPath=1 Include_test=0
 del "%PYTMP%" 2>nul
-
-:: Verify install after installation
-where python >nul 2>nul
-if %errorlevel% neq 0 (
-    echo [Bootstrap ERROR] Python installation failed. >> "%LOG%"
-    echo.
-    echo Python installation failed. Please install manually and rerun this installer.
+where python >nul 2>nul || (
+    echo [Bootstrap ERROR] Python install failed. >> "%LOG%"
+    echo Python installation failed. Exiting.
     pause
     exit /b 1
 )
-
-echo [Bootstrap] Python installation completed successfully. >> "%LOG%"
-echo Python installed successfully!
+echo [Bootstrap] Python installation complete. >> "%LOG%"
 timeout /t 2 >nul
 
 :: ==========================================================
 :checkdeps
-:: STEP 2: Run Python dependency checker
+:: STEP 2: Run dependency checks
 :: ==========================================================
-echo [Bootstrap] Checking system dependencies... >> "%LOG%"
-echo Running: python "%SETUPDIR%check_dependencies_win.py" >> "%LOG%"
+echo [Bootstrap] Running dependency check... >> "%LOG%"
 python "%SETUPDIR%check_dependencies_win.py"
-if %errorlevel% neq 0 (
-    echo [Bootstrap WARN] Dependency check returned %errorlevel% >> "%LOG%"
-    echo.
-    echo Dependencies were installed or verified; review console for any warnings.
-    timeout /t 2 >nul
-)
+echo [Bootstrap] Dependency check complete. >> "%LOG%"
 
 :: ==========================================================
-:: STEP 3: Run build tools installer (modular)
+:: STEP 3: Run build tools
 :: ==========================================================
-echo [Bootstrap] Checking and installing build tools... >> "%LOG%"
-echo Running: python "%SETUPDIR%install_build_tools.py" >> "%LOG%"
+echo [Bootstrap] Running build tools installer... >> "%LOG%"
 python "%SETUPDIR%install_build_tools.py"
-if %errorlevel% neq 0 (
-    echo [Bootstrap WARN] Build tools setup returned %errorlevel% >> "%LOG%"
-    echo.
-    echo Build tools installation may require a restart to fully detect.
-    timeout /t 2 >nul
-)
-
-:: ==========================================================
-:: STEP 3.5: Check for existing VergeGrid installation
-:: ==========================================================
-:: echo [Bootstrap] Checking for existing VergeGrid installation... >> "%LOG%"
-:: echo Running: python "%SETUPDIR%vergegrid_cleanup.py" >> "%LOG%"
-:: python "%SETUPDIR%vergegrid_cleanup.py"
-:: if %errorlevel% equ 99 (
-::     echo [Bootstrap INFO] No previous installation detected or user cancelled cleanup. >> "%LOG%"
-:: ) else if %errorlevel% equ 0 (
-::     echo [Bootstrap INFO] Cleanup or reset completed successfully. >> "%LOG%"
-:: ) else if %errorlevel% geq 2 (
-::     echo [Bootstrap ERROR] Cleanup encountered an error. >> "%LOG%"
-::     echo.
-::     echo Cleanup process failed. Check cleanup log for details:
-::     echo %TEMP%\vergegrid_cleanup.log
-::     pause
-:: )
+echo [Bootstrap] Build tools stage complete. >> "%LOG%"
 
 :: ==========================================================
 :runinstaller
-:: STEP 4: Launch VergeGrid main installer
+:: STEP 4: Launch VergeGrid Python installer
 :: ==========================================================
 echo [Bootstrap] Launching VergeGrid Python installer... >> "%LOG%"
 
-:: Prefer a known good Python install
 set "REALPY=C:\Python311\python.exe"
 if exist "%REALPY%" (
     echo [Bootstrap] Using verified Python: %REALPY% >> "%LOG%"
-    "%REALPY%" "%SETUPDIR%vergegrid-installer.py"
+    "%REALPY%" "%SETUPDIR%vergegrid-installer.py" --logdir "%LOGDIR%"
 ) else (
     echo [Bootstrap] Using active Python fallback >> "%LOG%"
-    python "%SETUPDIR%vergegrid-installer.py"
+    python "%SETUPDIR%vergegrid-installer.py" --logdir "%LOGDIR%"
 )
 
 if %errorlevel% neq 0 (
     echo [Bootstrap ERROR] Python script returned error code %errorlevel% >> "%LOG%"
-    echo.
-    echo Installer failed. Check log for details:
-    echo %LOG%
+    echo Installer failed. Check log for details: %LOG%
     pause
     exit /b %errorlevel%
 )
 
-echo.
 echo VergeGrid installation complete!
 echo [Bootstrap] Installation complete. >> "%LOG%"
+echo Logs saved in: %LOGDIR%
 endlocal
 exit /b 0

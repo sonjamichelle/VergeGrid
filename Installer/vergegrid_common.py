@@ -13,7 +13,6 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 # --- End Fix ---
 
-import os
 import hashlib
 import datetime
 import time
@@ -27,24 +26,22 @@ SAVE_PATH = Path(r"C:\ProgramData\VergeGrid\install_path.txt")
 # Logging System (Console + File Output)
 # ============================================================
 
+INSTALLER_LOG_DIR = Path(ROOT_DIR) / "Installer_Logs"
+INSTALLER_LOG_DIR.mkdir(parents=True, exist_ok=True)
+
 def _fallback_log(msg):
-    """Fallback logger used if no log() function is defined by caller."""
+    """Fallback logger — writes to ./Installer_Logs."""
     print(msg)
     try:
-        base_dir = Path(__file__).parent
-        log_dir = base_dir / "Setup_Logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-
-        # --- Keep only last 10 logs ---
-        logs = sorted(log_dir.glob("setup_*.log"), key=os.path.getmtime, reverse=True)
+        # --- Clean up old logs ---
+        logs = sorted(INSTALLER_LOG_DIR.glob("vergegrid_*.log"), key=os.path.getmtime, reverse=True)
         for old in logs[10:]:
             try:
                 old.unlink()
             except Exception:
                 pass
 
-        # --- Write to fallback log ---
-        log_file = log_dir / f"vergegrid_fallback_{datetime.datetime.now().strftime('%Y%m%d')}.log"
+        log_file = INSTALLER_LOG_DIR / f"vergegrid_fallback_{datetime.datetime.now().strftime('%Y%m%d')}.log"
         timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(f"{timestamp} {msg}\n")
@@ -52,17 +49,12 @@ def _fallback_log(msg):
     except Exception as e:
         print(f"[LOG ERROR] Could not write to fallback log: {e}")
 
+
 def _get_logger():
-    """Return a unified logger that prints to console and writes to Setup_Logs directory."""
+    """Unified logger writing to ./Installer_Logs (shared by all modules)."""
     import inspect
-    import datetime
 
-    # Determine base directory relative to this script (e.g. D:\VergeGrid_Setup)
-    base_dir = Path(__file__).parent
-    log_dir = base_dir / "Setup_Logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    log_file = log_dir / f"setup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    log_file = INSTALLER_LOG_DIR / f"vergegrid_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
     def _log(message):
         timestamp = datetime.datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
@@ -74,7 +66,7 @@ def _get_logger():
         except Exception as e:
             print(f"[LOG ERROR] Could not write to {log_file}: {e}")
 
-    # If calling frame already defines a log function, chain both
+    # If the parent script already defined a "log", chain both
     frame = inspect.currentframe().f_back
     if "log" in frame.f_globals:
         parent_log = frame.f_globals["log"]
@@ -101,6 +93,7 @@ def calc_file_sha256(path):
         return sha.hexdigest()
     except Exception:
         return None
+
 
 # ============================================================
 # Configuration Loader / Creator
@@ -133,7 +126,6 @@ def load_vergegrid_config(path="vergegrid.conf", root="C:\\VergeGrid"):
         ensure_vergegrid_config(root)
         return config
 
-    # --- Sanity: check if zero-byte or unreadable ---
     if os.path.getsize(path) == 0:
         log(Fore.RED + f"[CORRUPT] Empty config detected at {path}. Backing up and regenerating.")
         _backup_and_regen_conf(path, root, log)
@@ -166,7 +158,6 @@ def load_vergegrid_config(path="vergegrid.conf", root="C:\\VergeGrid"):
         _backup_and_regen_conf(path, root, log)
         return config
 
-    # --- Integrity Check: critical keys ---
     critical_keys = ["PHP_ROOT", "APACHE_ROOT", "MYSQL_ROOT", "OPEN_SIM_ROOT"]
     missing = [k for k in critical_keys if k not in config]
     if missing:
@@ -190,9 +181,10 @@ def _backup_and_regen_conf(path, root, log):
 
     ensure_vergegrid_config(root)
 
+
 def ensure_vergegrid_config(root):
     """Ensures vergegrid.conf exists with sane defaults and correct install root."""
-    log = _get_logger()  # <-- FIX: use the active logger (installer, cleanup, or fallback)
+    log = _get_logger()
     cfg_path = os.path.join(root, "vergegrid.conf")
     if os.path.exists(cfg_path):
         log(Fore.CYAN + f"[INFO] Config file found: {cfg_path}")
@@ -234,6 +226,7 @@ def read_saved_path():
             return None
     return None
 
+
 def save_install_path(path: Path):
     """Save install path to ProgramData for later lookups."""
     log = _get_logger()
@@ -244,6 +237,7 @@ def save_install_path(path: Path):
     except Exception as e:
         log(Fore.RED + f"[WARN] Could not save install path: {e}")
 
+
 def find_existing_install():
     """Scan all drives for VergeGrid installations."""
     from string import ascii_uppercase
@@ -252,6 +246,7 @@ def find_existing_install():
         if path.exists():
             return path.parent
     return None
+
 
 # ============================================================
 # Diagnostics

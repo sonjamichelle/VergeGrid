@@ -5,6 +5,11 @@
 # --- VergeGrid Path Fix ---
 import os
 import sys
+import platform
+import subprocess
+import json
+import glob
+from datetime import datetime
 
 # Find VergeGrid root (one level up from /setup/)
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -12,34 +17,31 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 # --- End Fix ---
 
+# --- Logging Setup ---
+INSTALLER_LOG_DIR = os.path.join(ROOT_DIR, "Installer_Logs")
+os.makedirs(INSTALLER_LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(INSTALLER_LOG_DIR, "dependency_check.log")
 
-import os
-import sys
-import platform
-import subprocess
-import json
-import glob
+def log_message(message):
+    """Write message to both console and log file."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(f"[{timestamp}] {message}\n")
+    print(message)
 
-from vergegrid_common import (
-    load_vergegrid_config,
-    ensure_vergegrid_config,
-    save_install_path,
-    read_saved_path,
-    find_existing_install
-)
+log_message("=== VergeGrid Windows Dependency Checker Started ===")
 
 # --- Auto-install colorama if missing ---
 try:
     from colorama import init, Fore, Style
 except ImportError:
-    print("colorama not found — installing it now...")
+    log_message("colorama not found — installing it now...")
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "colorama"])
         from colorama import init, Fore, Style
-        print("colorama installed successfully.\n")
+        log_message("colorama installed successfully.\n")
     except subprocess.CalledProcessError as e:
-        print("Failed to install colorama automatically.")
-        print("Error:", e)
+        log_message(f"Failed to install colorama automatically: {e}")
         sys.exit(1)
 
 init(autoreset=True)
@@ -89,41 +91,27 @@ def detect_dotnet_sdk():
 
 def install_dotnet_sdk():
     """Attempt to install the latest .NET SDK using winget (fully verbose)."""
-    print("\n" + Style.BRIGHT + "=" * 60)
-    print(Style.BRIGHT + Fore.YELLOW + "Starting .NET SDK installation (verbose mode enabled)")
-    print(Style.BRIGHT + "=" * 60 + "\n")
-
+    log_message("Attempting .NET SDK installation using winget...")
     cmd = [
         "winget", "install",
         "--id", "Microsoft.DotNet.SDK.8",
         "--accept-source-agreements",
         "--accept-package-agreements"
     ]
-
-    print(Style.DIM + "Executing command: " + " ".join(cmd) + "\n")
-
     try:
-        process = subprocess.Popen(cmd, stdout=sys.stdout, stderr=sys.stderr)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        for line in process.stdout:
+            log_message(line.strip())
         process.wait()
-
-        print("\n" + Style.BRIGHT + "-" * 60)
         if process.returncode == 0:
-            print(Fore.GREEN + "✅  .NET SDK installation completed successfully.")
-            print(Style.BRIGHT + "-" * 60 + "\n")
+            log_message("✅ .NET SDK installation completed successfully.")
             return True
         else:
-            print(Fore.RED + f"❌  .NET SDK installation failed with exit code {process.returncode}.")
-            print(Fore.YELLOW + "Try running manually:\n  winget install Microsoft.DotNet.SDK.8")
-            print(Style.BRIGHT + "-" * 60 + "\n")
+            log_message(f"❌ .NET SDK installation failed with code {process.returncode}.")
             return False
-
-    except FileNotFoundError:
-        print(Fore.RED + "Winget not found — please install it from the Microsoft Store or enable App Installer.")
-        return False
     except Exception as e:
-        print(Fore.RED + f"An unexpected error occurred while installing .NET SDK:\n{e}")
+        log_message(f"❌ .NET SDK installation error: {e}")
         return False
-
 
 # --- Dependency Definitions ---
 REQUIRED_DEPENDENCIES = {
@@ -137,48 +125,40 @@ REQUIRED_DEPENDENCIES = {
 # --- Main Logic ---
 def main():
     if platform.system() != "Windows":
-        print(Fore.RED + "This script is designed for Windows systems only.")
+        log_message("This script is designed for Windows systems only.")
         sys.exit(2)
 
     results = {}
     all_ok = True
     warnings = False
 
-    print(Style.BRIGHT + "\n=== Windows System Dependency Check ===\n")
+    log_message("=== Windows System Dependency Check ===")
 
     # --- Check .NET Runtime ---
     sdk_ok, sdk_ver = detect_dotnet_sdk()
     rt_ok, rt_ver = detect_dotnet_runtime()
 
     if rt_ok:
-        print(Fore.GREEN + f"[OK] .NET Runtime            → {rt_ver}")
+        log_message(f"[OK] .NET Runtime → {rt_ver}")
     else:
         all_ok = False
-        print(Fore.RED + f"[MISSING] .NET Runtime       → {rt_ver}")
+        log_message(f"[MISSING] .NET Runtime → {rt_ver}")
 
     if sdk_ok:
-        print(Fore.GREEN + f"[OK] .NET SDK                → {sdk_ver}")
+        log_message(f"[OK] .NET SDK → {sdk_ver}")
     else:
-        print(Fore.RED + f"[MISSING] .NET SDK           → {sdk_ver}")
+        log_message(f"[MISSING] .NET SDK → {sdk_ver}")
         if install_dotnet_sdk():
             sdk_ok, sdk_ver = detect_dotnet_sdk()
             if sdk_ok:
-                print(Fore.GREEN + f"[OK] .NET SDK (after install) → {sdk_ver}")
+                log_message(f"[OK] .NET SDK (after install) → {sdk_ver}")
             else:
-                print(Fore.RED + f"[FAILED] .NET SDK installation could not be verified.")
+                log_message(f"[FAILED] .NET SDK installation could not be verified.")
         else:
             all_ok = False
 
-    results[".NET Runtime"] = {
-        "status": "OK" if rt_ok else "MISSING",
-        "details": rt_ver,
-        "required": True,
-    }
-    results[".NET SDK"] = {
-        "status": "OK" if sdk_ok else "MISSING",
-        "details": sdk_ver,
-        "required": True,
-    }
+    results[".NET Runtime"] = {"status": "OK" if rt_ok else "MISSING", "details": rt_ver, "required": True}
+    results[".NET SDK"] = {"status": "OK" if sdk_ok else "MISSING", "details": sdk_ver, "required": True}
 
     # --- Check Other Dependencies ---
     for name, info in REQUIRED_DEPENDENCIES.items():
@@ -195,14 +175,14 @@ def main():
             message = ", ".join(matches) if matches else "File not found"
 
         if status:
-            print(Fore.GREEN + f"[OK] {name:25s} → {version}")
+            log_message(f"[OK] {name:25s} → {version}")
         else:
             if info["required"]:
                 all_ok = False
-                print(Fore.RED + f"[MISSING] {name:25s} → {message}")
+                log_message(f"[MISSING] {name:25s} → {message}")
             else:
                 warnings = True
-                print(Fore.YELLOW + f"[WARNING] {name:25s} → {message}")
+                log_message(f"[WARNING] {name:25s} → {message}")
 
         results[name] = {
             "status": "OK" if status else "MISSING" if info["required"] else "WARNING",
@@ -211,16 +191,18 @@ def main():
         }
 
     # --- JSON Output ---
-    if "--json" in sys.argv:
-        with open("dependency_report.json", "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=4)
-        print(Fore.CYAN + "\nJSON report saved to dependency_report.json")
+    json_path = os.path.join(INSTALLER_LOG_DIR, "dependency_report.json")
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=4)
+    log_message(f"[INFO] JSON dependency report saved to {json_path}")
 
     # --- Summary ---
-    print("\n" + Style.BRIGHT + "Summary:")
-    print("  OK:", sum(1 for r in results.values() if r["status"] == "OK"))
-    print("  Missing:", sum(1 for r in results.values() if r["status"] == "MISSING"))
-    print("  Warnings:", sum(1 for r in results.values() if r["status"] == "WARNING"))
+    ok_count = sum(1 for r in results.values() if r["status"] == "OK")
+    missing_count = sum(1 for r in results.values() if r["status"] == "MISSING")
+    warn_count = sum(1 for r in results.values() if r["status"] == "WARNING")
+
+    log_message(f"Summary: OK={ok_count}, Missing={missing_count}, Warnings={warn_count}")
+    log_message("=== Dependency Check Complete ===")
 
     if not all_ok:
         sys.exit(2)
@@ -228,6 +210,7 @@ def main():
         sys.exit(1)
     else:
         sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

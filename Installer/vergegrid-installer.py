@@ -30,6 +30,27 @@ try:
 except ModuleNotFoundError:
     import common
 
+
+# --------------------------------------------------------------------
+# Custom Log Directory Override (Installer_Logs support)
+# --------------------------------------------------------------------
+LOG_OVERRIDE = None
+if "--logdir" in sys.argv:
+    idx = sys.argv.index("--logdir")
+    if idx + 1 < len(sys.argv):
+        LOG_OVERRIDE = Path(sys.argv[idx + 1]).resolve()
+        sys.argv.pop(idx)  # remove --logdir
+        sys.argv.pop(idx)  # remove path arg
+
+if LOG_OVERRIDE:
+    LOG_OVERRIDE.mkdir(parents=True, exist_ok=True)
+    print(f"[INFO] Overriding log directory → {LOG_OVERRIDE}")
+else:
+    LOG_OVERRIDE = Path(__file__).resolve().parent / "Installer_Logs"
+    LOG_OVERRIDE.mkdir(parents=True, exist_ok=True)
+    print(f"[INFO] Defaulting to log directory → {LOG_OVERRIDE}")
+
+
 # --------------------------------------------------------------------
 # Auto-install psutil if missing
 # --------------------------------------------------------------------
@@ -227,10 +248,10 @@ def main():
 
     install_root = select_install_drive()
     downloads_root = Path(install_root) / "Downloads"
-    logs_root = Path(install_root) / "Logs"
+    logs_root = LOG_OVERRIDE
 
     os.makedirs(downloads_root, exist_ok=True)
-    os.makedirs(logs_root, exist_ok=True)
+    logs_root.mkdir(parents=True, exist_ok=True)
 
     setup_dir = Path(__file__).resolve().parent / "setup"
     setup_dir.mkdir(exist_ok=True)
@@ -356,8 +377,6 @@ def main():
         print("[FATAL] Region creation failed during Landing Estate setup.")
         common.write_log("[FATAL] Region creation failed during Landing Estate setup.", "ERROR")
         sys.exit(1)
-
-
 
     # ============================================================
     # FINAL SUMMARY

@@ -6,6 +6,10 @@
 # --- VergeGrid Path Fix ---
 import os
 import sys
+import subprocess
+import platform
+from datetime import datetime
+from colorama import init, Fore, Style
 
 # Find VergeGrid root (one level up from /setup/)
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -13,26 +17,29 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 # --- End Fix ---
 
-import os
-import sys
-import subprocess
-import platform
-from colorama import init, Fore, Style
+# --- Installer Logs Setup ---
+INSTALLER_LOG_DIR = os.path.join(ROOT_DIR, "Installer_Logs")
+os.makedirs(INSTALLER_LOG_DIR, exist_ok=True)
+LOG_FILE = os.path.join(INSTALLER_LOG_DIR, "build_tools_install.log")
 
-from vergegrid_common import (
-    load_vergegrid_config,
-    ensure_vergegrid_config,
-    save_install_path,
-    read_saved_path,
-    find_existing_install
-)
+def log_message(message, color=None):
+    """Write message to both console and log file (with optional color)."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    formatted = f"[{timestamp}] {message}"
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(formatted + "\n")
+    if color:
+        print(color + message + Style.RESET_ALL)
+    else:
+        print(message)
+
+log_message("=== VergeGrid Build Tools Installer Started ===")
 
 init(autoreset=True)
 
 # --------------------------------------------------------
 # Helper Functions
 # --------------------------------------------------------
-
 def run_command(command):
     """Run a shell command and return (status, output)."""
     try:
@@ -62,10 +69,7 @@ def tool_exists(tool_name, alt_paths=None):
 
 def install_tool(name, winget_id):
     """Install or upgrade a tool using winget with verbose output."""
-    print("\n" + Style.BRIGHT + "=" * 60)
-    print(Style.BRIGHT + Fore.YELLOW + f"Installing {name} (verbose mode enabled)")
-    print(Style.BRIGHT + "=" * 60 + "\n")
-
+    log_message(f"=== Installing {name} ===", Fore.YELLOW)
     cmd = [
         "winget", "install",
         "--id", winget_id,
@@ -73,46 +77,41 @@ def install_tool(name, winget_id):
         "--accept-package-agreements"
     ]
 
-    print(Style.DIM + "Executing: " + " ".join(cmd) + "\n")
-
+    log_message("Executing: " + " ".join(cmd), Style.DIM)
     try:
-        process = subprocess.Popen(cmd, stdout=sys.stdout, stderr=sys.stderr)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        for line in process.stdout:
+            log_message(line.strip())
         process.wait()
 
-        print("\n" + Style.BRIGHT + "-" * 60)
-        # Winget returns non-zero for "already installed" sometimes
         if process.returncode == 0:
-            print(Fore.GREEN + f"✅  {name} installation completed successfully.")
-            result = True
+            log_message(f"✅ {name} installation completed successfully.", Fore.GREEN)
+            return True
         elif process.returncode in (2316632107, 0x89C5010B):
-            print(Fore.CYAN + f"ℹ️  {name} already installed and up to date.")
-            result = True
+            log_message(f"ℹ️ {name} already installed and up to date.", Fore.CYAN)
+            return True
         else:
-            print(Fore.RED + f"❌  {name} installation failed with exit code {process.returncode}.")
-            print(Fore.YELLOW + f"Try running manually:\n  winget install --id {winget_id}")
-            result = False
-
-        print(Style.BRIGHT + "-" * 60 + "\n")
-        return result
+            log_message(f"❌ {name} installation failed with exit code {process.returncode}.", Fore.RED)
+            log_message(f"Try running manually: winget install --id {winget_id}", Fore.YELLOW)
+            return False
 
     except FileNotFoundError:
-        print(Fore.RED + "Winget not found — install App Installer from Microsoft Store.")
+        log_message("Winget not found — install App Installer from Microsoft Store.", Fore.RED)
         return False
     except Exception as e:
-        print(Fore.RED + f"Error during {name} install: {e}")
+        log_message(f"Error during {name} install: {e}", Fore.RED)
         return False
 
 
 # --------------------------------------------------------
 # Detection + Install Sequence
 # --------------------------------------------------------
-
 def main():
     if platform.system() != "Windows":
-        print(Fore.RED + "This script only runs on Windows.")
+        log_message("This script only runs on Windows.", Fore.RED)
         sys.exit(2)
 
-    print(Style.BRIGHT + "\n=== Build Tools Detection & Installation ===\n")
+    log_message("\n=== Build Tools Detection & Installation ===\n", Style.BRIGHT)
 
     tools = {
         "Visual Studio Build Tools 2022": {
@@ -142,11 +141,11 @@ def main():
     all_ok = True
 
     for name, info in tools.items():
-        print(Style.BRIGHT + Fore.YELLOW + f"[CHECKING] {name:30s} → Scanning system...")
+        log_message(f"[CHECKING] {name} → Scanning system...", Fore.YELLOW)
         detected = info["detect"]()
 
         if detected:
-            print(Fore.GREEN + f"[OK] {name:30s} → Detected")
+            log_message(f"[OK] {name} → Detected", Fore.GREEN)
             results[name] = "OK"
             continue
 
@@ -154,24 +153,27 @@ def main():
         if success:
             verify = info["detect"]()
             if verify:
-                print(Fore.GREEN + f"[OK] {name:30s} → Installed successfully")
+                log_message(f"[OK] {name} → Installed successfully", Fore.GREEN)
                 results[name] = "Installed"
             else:
-                print(Fore.CYAN + f"[INFO] {name:30s} → Installed but not yet detected (may require restart)")
+                log_message(f"[INFO] {name} → Installed but not yet detected (may require restart)", Fore.CYAN)
                 results[name] = "Installed (Pending Restart)"
         else:
-            print(Fore.RED + f"[FAILED] {name:30s} → Could not be installed or detected")
+            log_message(f"[FAILED] {name} → Could not be installed or detected", Fore.RED)
             all_ok = False
             results[name] = "Failed"
 
-    print("\n" + Style.BRIGHT + "Summary:")
+    log_message("\n=== Summary ===", Style.BRIGHT)
     for name, status in results.items():
         color = (
             Fore.GREEN
             if status in ("OK", "Installed", "Installed (Pending Restart)")
             else Fore.RED
         )
-        print(color + f"  {name:30s} → {status}")
+        log_message(f"  {name:30s} → {status}", color)
+
+    log_message("\n=== VergeGrid Build Tools Installer Complete ===\n")
+    log_message(f"Full log saved to: {LOG_FILE}")
 
     if all_ok:
         sys.exit(0)

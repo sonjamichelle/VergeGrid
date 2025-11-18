@@ -163,7 +163,7 @@ def launch_and_verify(install_root):
         return 3
 
     print(f"✓ Robust.exe started (PID={robust_process.pid}) using {robust_ini.name}.")
-    print("  Waiting 30 seconds for schema creation...\n")
+    print("  Waiting 30 seconds for schema creation...\n\nDO NOT CLOSE THE CONSOLE OR INTERACT WITH IT.\n\nJUST SIT BACK AND CHILL FOR A BIT.")
     common.write_log(f"[INFO] Robust.exe launched (PID={robust_process.pid})", "INFO")
 
     # --------------------------------------------------------------------
@@ -177,7 +177,7 @@ def launch_and_verify(install_root):
         print("✓ Database verified successfully on first pass.")
         common.write_log("[OK] Database verified on first pass.", "INFO")
     else:
-        print("⚠️  Database not yet complete. Waiting 30 more seconds...")
+        print("⚠️  Database not yet complete. Waiting 30 more seconds...\n\nDO NOT CLOSE THE CONSOLE OR INTERACT WITH IT.\n\nJUST SIT BACK AND CHILL FOR A BIT.")
         time.sleep(30)
         print(">>> Checking database status (pass 2)...")
         result = verify_robust_db(install_root)
@@ -271,10 +271,15 @@ pause
 
 
 # ------------------------------------------------------------
-# ENTRY POINT
+# ENTRY POINT (Dynamic)
 # ------------------------------------------------------------
 if __name__ == "__main__":
-    install_root = Path("D:\\VergeGrid")
+    if len(sys.argv) < 2:
+        print("Usage: python verify-db-robust.py <install_root>")
+        sys.exit(1)
+
+    install_root = Path(sys.argv[1])
     print("=== VergeGrid Robust Database Verification and Controlled Startup ===")
     result = launch_and_verify(install_root)
     sys.exit(result)
+

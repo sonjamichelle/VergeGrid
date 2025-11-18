@@ -13,7 +13,6 @@ Purpose:
 import os
 import sys
 
-# Find VergeGrid root (one level up from /setup/)
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
@@ -22,7 +21,7 @@ if ROOT_DIR not in sys.path:
 import subprocess
 import time
 import ctypes
-from pathlib import Path  # ✅ FIXED: Global import to avoid UnboundLocalError
+from pathlib import Path
 
 try:
     from setup import common
@@ -57,24 +56,51 @@ def confirm(prompt, default_yes=True):
 
 
 def select_install_drive():
+    """Prompt user to select an installation drive and custom folder name."""
     print("\nVergeGrid Installer - Drive Selection\n")
-    drives = [d.device for d in psutil.disk_partitions(all=False)]
-    for d in drives:
+
+    drives = []
+    for part in psutil.disk_partitions(all=False):
         try:
-            usage = psutil.disk_usage(d)
-            print(f"  {d} - {usage.free / (1024**3):.2f} GB free")
+            usage = psutil.disk_usage(part.device)
+            drives.append((part.device, usage.free / (1024**3)))
         except PermissionError:
-            pass
-    choice = input("Enter drive letter for installation (default C): ").strip().upper()
-    if not choice:
-        choice = "C"
-    if not choice.endswith(":"):
-        choice += ":"
-    path = os.path.join(choice + "\\", "VergeGrid")
-    print(f"Installation path set to: {path}")
-    if not confirm("Confirm installation path?"):
+            continue
+
+    if not drives:
+        print("[FATAL] No accessible drives found. Cannot continue.")
+        sys.exit(1)
+
+    print("Available drives:")
+    for idx, (drive, free_gb) in enumerate(drives, 1):
+        print(f"  {idx}. {drive:<5} - {free_gb:>7.2f} GB free")
+
+    while True:
+        choice = input(f"\nSelect target drive [1-{len(drives)}] (default 1): ").strip()
+        if not choice:
+            choice = "1"
+        if choice.isdigit() and 1 <= int(choice) <= len(drives):
+            selected_drive = drives[int(choice) - 1][0]
+            break
+        else:
+            print(f"[WARN] Invalid selection. Enter a number between 1 and {len(drives)}.")
+
+    folder_name = input("Enter installation folder name (default VergeGrid): ").strip()
+    if not folder_name:
+        folder_name = "VergeGrid"
+
+    install_path = os.path.join(selected_drive, folder_name)
+    print(f"\nInstallation path set to: {install_path}")
+
+    if not confirm("Create and use this path?"):
+        print("[CANCELLED] Installation aborted by user.")
         sys.exit(0)
-    return path
+
+    os.makedirs(os.path.join(install_path, "Downloads"), exist_ok=True)
+    os.makedirs(os.path.join(install_path, "Logs"), exist_ok=True)
+    print(f"[OK] Created installation directories under {install_path}")
+
+    return install_path
 
 
 def ensure_admin():
@@ -99,10 +125,7 @@ def ensure_admin():
 # Component Runner
 # --------------------------------------------------------------------
 def run_component(script_name, *args, title=None):
-    """
-    Calls a modular component (fetcher) script via subprocess.
-    Logs output, exit code, and checks for failure.
-    """
+    """Calls a modular component (fetcher) script via subprocess."""
     if title:
         print(f"\n>>> Running {title} ...")
         print("=" * 70)
@@ -118,7 +141,6 @@ def run_component(script_name, *args, title=None):
     exit_code = result.returncode
     status = "SUCCESS" if exit_code == 0 else "FAIL"
 
-    # Log and print results
     print(f"\n[{status}] {title or script_name} exited with code {exit_code}\n")
     common.write_log(f"[{status}] {title or script_name} exited with code {exit_code}")
 
@@ -146,7 +168,6 @@ def main():
     os.makedirs(downloads_root, exist_ok=True)
     os.makedirs(logs_root, exist_ok=True)
 
-    # Setup unified log for all components
     log_file = logs_root / "vergegrid-install.log"
     common.set_log_file(str(log_file))
     common.write_log("=== VergeGrid Modular Installer Started ===")
@@ -161,42 +182,52 @@ def main():
     installed = []
 
     # ============================================================
-    # STEP 1: MySQL
+    # STEP 1–5: MySQL → Let's Encrypt
     # ============================================================
     if confirm("Install MySQL?"):
         if run_component("fetch-mysql.py", install_root, title="MySQL Installer"):
             installed.append(("MySQL", install_root))
         else:
             sys.exit(1)
-            
+
+    if confirm("Fetch Apache Web Server?"):
+        if run_component("fetch-apache.py", install_root, title="Apache Fetcher"):
+            installed.append(("Apache", install_root))
+
+    if confirm("Fetch PHP Interpreter?"):
+        if run_component("fetch-php.py", install_root, title="PHP Fetcher"):
+            installed.append(("PHP", install_root))
+
+    if confirm("Initialize Apache/PHP Integration?"):
+        if run_component("init-apache-php.py", install_root, title="Apache/PHP Integration"):
+            installed.append(("Apache-PHP Stack", install_root))
+
+    if confirm("Install Let's Encrypt (Windows ACME) Support?"):
+        if run_component("fetch-letsencrypt.py", install_root, title="Let's Encrypt Installer"):
+            installed.append(("LetsEncrypt", install_root))
+
     # ============================================================
-    # STEP 2: OpenSim
+    # STEP 6: OpenSim (Final Step)
     # ============================================================
     if confirm("Install OpenSim?"):
-        mysql_user = input("MySQL Username [root] JUST PRESS ENTER!: ").strip() or "root"
-        mysql_pass = input("MySQL Password [blank] JUST PRESS ENTER!: ").strip()
+        mysql_user = "root"
+        mysql_pass = ""
 
         if run_component("fetch-opensim.py", install_root, mysql_user, mysql_pass, title="OpenSim Fetcher"):
             installed.append(("OpenSim", install_root))
 
-            # Initialize OpenSim (creates DBs + patches INIs)
             if run_component("init-opensim.py", install_root, mysql_user, mysql_pass, title="OpenSim Initializer"):
                 common.write_log("[OK] OpenSim base configuration completed successfully.", "INFO")
             else:
                 common.write_log("[FATAL] OpenSim initialization failed.", "ERROR")
                 sys.exit(1)
 
-            # ------------------------------------------------------------
-            # SAFETY CHECK: Make sure config files are actually there
-            # ------------------------------------------------------------
-            import time
-
             opensim_root = Path(install_root) / "OpenSim" / "bin"
             gridcommon = opensim_root / "config-include" / "GridCommon.ini"
             robust_ini = opensim_root / "Robust.ini"
 
             print("\n[INFO] Verifying patched configuration files before Robust registration...")
-            time.sleep(5)  # let filesystem flush
+            time.sleep(5)
             if not gridcommon.exists() or gridcommon.stat().st_size < 200:
                 print("[FATAL] GridCommon.ini missing or invalid. Cannot continue.")
                 sys.exit(3)
@@ -205,59 +236,24 @@ def main():
                 sys.exit(3)
             print("✓ Configuration validation passed. Proceeding to Robust setup.\n")
 
-            # ------------------------------------------------------------
-            # STEP 2.1: Register Robust Service (manual start only)
-            # ------------------------------------------------------------
-            if run_component("init-opensim-services.py", install_root, title="OpenSim Robust Service Registration"):
-                common.write_log("[OK] Robust service registered successfully (manual start).", "INFO")
-                installed.append(("Robust Service", install_root))
+            # ============================================================
+            # STEP 6.2: Launch and Verify Robust Database (Auto-run)
+            # ============================================================
+            print("\n[INFO] Starting automatic Robust verification and schema test...\n")
+            if run_component("verify-db-robust.py", install_root, title="Robust Database Verifier"):
+                print("[OK] Robust verification and service setup completed successfully.\n")
+                common.write_log("[OK] Robust verification completed successfully.", "INFO")
+                installed.append(("Robust Verification", install_root))
             else:
-                print("[FATAL] Robust service registration failed. Aborting installation.")
+                print("[FATAL] Robust verification failed — manual inspection required.")
+                common.write_log("[FATAL] Robust verification failed.", "ERROR")
                 sys.exit(1)
 
-            # ------------------------------------------------------------
-            # SUCCESS – continue to next installer stage
-            # ------------------------------------------------------------
-            print("\n[OK] OpenSim + Robust registration completed. Proceeding to Apache setup...\n")
+            print("\n[OK] OpenSim + Robust registration completed successfully.\n")
 
         else:
             sys.exit(1)
 
-    # ============================================================
-    # STEP 3: Apache (Fetch + Extract Only)
-    # ============================================================
-    if confirm("Fetch Apache Web Server?"):
-        if run_component("fetch-apache.py", install_root, title="Apache Fetcher"):
-            installed.append(("Apache", install_root))
-        else:
-            print("[WARN] Apache install skipped or failed.")
-
-    # ============================================================
-    # STEP 4: PHP (Fetch + Extract Only)
-    # ============================================================
-    if confirm("Fetch PHP Interpreter?"):
-        if run_component("fetch-php.py", install_root, title="PHP Fetcher"):
-            installed.append(("PHP", install_root))
-        else:
-            print("[WARN] PHP install skipped or failed.")
-
-    # ============================================================
-    # STEP 5: Apache/PHP Integration
-    # ============================================================
-    if confirm("Initialize Apache/PHP Integration?"):
-        if run_component("init-apache-php.py", install_root, title="Apache/PHP Integration"):
-            installed.append(("Apache-PHP Stack", install_root))
-        else:
-            print("[WARN] Apache/PHP integration skipped or failed.")
-
-    # ============================================================
-    # STEP 6: Let’s Encrypt (Windows ACME)
-    # ============================================================
-    if confirm("Install Let's Encrypt (Windows ACME) Support?"):
-        if run_component("fetch-letsencrypt.py", install_root, title="Let's Encrypt Installer"):
-            installed.append(("LetsEncrypt", install_root))
-        else:
-            print("[WARN] Let's Encrypt install skipped or failed.")
 
     # ============================================================
     # FINAL SUMMARY

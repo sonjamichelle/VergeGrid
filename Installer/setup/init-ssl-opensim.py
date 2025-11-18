@@ -25,8 +25,6 @@ except ImportError:
     import pymysql
 # --- End dependency check ---
 
-import os
-import sys
 import shutil
 from pathlib import Path
 import time
@@ -58,13 +56,11 @@ def patch_ini_file(path: Path, cert_path: Path, key_path: Path):
         common.write_log(f"[WARN] {path} not found, skipping SSL patch.")
         return False
 
-    content = []
     with open(path, "r", encoding="utf-8") as f:
         content = f.readlines()
 
     # Remove old VergeGrid SSL block if it exists
-    start_idx = None
-    end_idx = None
+    start_idx = end_idx = None
     for i, line in enumerate(content):
         if marker_start in line:
             start_idx = i
@@ -118,8 +114,11 @@ def find_certs(letsencrypt_root: Path, opensim_root: Path):
 # ------------------------------------------------------------
 # Main Logic
 # ------------------------------------------------------------
-def init_ssl_opensim(install_root):
+def init_ssl_opensim(install_root: Path):
+    """Apply Let's Encrypt SSL configuration to OpenSim and Robust."""
     install_root = Path(install_root).resolve()
+    os.environ["VERGEGRID_INSTALL_ROOT"] = str(install_root)
+
     logs_root = install_root / "Logs"
     opensim_root = install_root / "OpenSim"
     robust_root = install_root / "OpenSim" / "bin"
@@ -188,19 +187,21 @@ def init_ssl_opensim(install_root):
     print("Robust and simulator configs updated to use HTTPS.\n")
     print("You may now restart your Robust and region services to apply SSL.")
     common.write_log("[SUCCESS] OpenSim SSL initialization complete.")
+    return 0
 
 
 # ------------------------------------------------------------
-# Entry Point
+# Entry Point (Dynamic)
 # ------------------------------------------------------------
 if __name__ == "__main__":
+    print("\n=== VergeGrid OpenSim SSL Initializer (Dynamic Mode) ===")
     if len(sys.argv) < 2:
         print("Usage: python init-ssl-opensim.py <install_root>")
         sys.exit(1)
 
+    install_root = Path(sys.argv[1])
     try:
-        init_ssl_opensim(sys.argv[1])
-        sys.exit(0)
+        sys.exit(init_ssl_opensim(install_root))
     except Exception as e:
         import traceback
         traceback.print_exc()

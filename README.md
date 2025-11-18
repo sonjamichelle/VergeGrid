@@ -2,9 +2,9 @@ README.md
 
 VergeGrid
 
-VergeGrid is a next-generation OpenSimulator-based virtual world platform built entirely through modules, plugins, and external services, without forking OpenSim. The goal is simple: deliver the best features from SL, Halcyon, nWorlds, MOSES, and Aurora in a modern, stable, future-proof grid architecture.
+VergeGrid is a next-generation OpenSimulator-based virtual world platform built entirely through modules, plugins, and external services, without forking OpenSim. The goal is simple: deliver the best features from SL, Halcyon, InWorldz, MOSES, and WhiteCore (Aurora) in a modern, stable, future-proof grid architecture.
 
-VergeGrid is designed and built by Sonja and Nikki as an advanced, modular replacement for existing OpenSim distributions with a strong focus on:
+VergeGrid is designed and built by Sonja and Nikki Thomas as an advanced, modular replacement for existing OpenSim distributions with a strong focus on:
 
 Real physics
 
@@ -32,14 +32,8 @@ Automated setup of MySQL, OpenSim, Apache, PHP, LetsEncrypt, region files, estat
 Admin Web UI
 Grid management, user tools, stats, and region oversight.
 
-GloBits Integration
+Currency Integration
 Currency support using the existing module system.
-
-Patched OpenSim
-Only modification: removing the draw distance clamp. Everything else remains stock.
-
-Custom VergeGrid Viewer
-A viewer with removed draw distance limit and optional interface enhancements.
 
 Region Crossing Enhancements
 Halcyon/nWorlds-inspired border smoothing implemented through modules.
@@ -52,6 +46,12 @@ WindLight-style commands, EEP-style results, simple for creators and future-proo
 
 InShape Revival
 Phone-driven avatar movement, real-world walking and running, waypoint paths, wearable integrations, and HUD feedback.
+
+Patched OpenSim
+Only modification: removing the draw distance clamp. Everything else remains stock.
+
+Custom VergeGrid Viewer
+A viewer with removed draw distance limit and optional interface enhancements.
 
 ==================================================
 

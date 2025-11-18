@@ -22,10 +22,11 @@ VergeGrid/
 
 Installer
 installer/
-   vergegrid-install.ps1
+   vergegrid-install.bat
    templates/
    logs/
    config/
+   scripts/
 
 
 Handles full automated deployment.

@@ -177,7 +177,7 @@ This protects creators from EEP complexity while remaining future-proof.
 
 10. Full InShape Revival
 
-A complete recreation and enhancement of the nWorlds InShape system:
+A complete recreation and enhancement of the InWorldz InShape system:
 
 Core capabilities:
 

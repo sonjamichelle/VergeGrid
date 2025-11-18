@@ -33,24 +33,7 @@ Endpoint structure designed
 
 ==================================================
 
-Phase 2 — Viewer & Patching
-🔄 Draw Distance Patch
-
-Confirm patch points
-
-Add automated patcher to installer
-
-🟦 VergeGrid Viewer
-
-Pull Firestorm source
-
-Remove draw distance clamp
-
-Build branded binaries
-
-==================================================
-
-Phase 3 — Physics
+Phase 2 — Physics
 🟦 PhysX Module
 
 Build physx-wrapper fork
@@ -65,7 +48,7 @@ Test region stepping
 
 ==================================================
 
-Phase 4 — Environment System
+Phase 3 — Environment System
 🟦 Hybrid WindLight/EEP
 
 Create parser
@@ -78,7 +61,7 @@ Deploy on single region
 
 ==================================================
 
-Phase 5 — Region Crossing
+Phase 4 — Region Crossing
 🟦 Cross-Region Movement Enhancements
 
 Improve transfer timing
@@ -89,7 +72,7 @@ Maintain velocity across borders
 
 ==================================================
 
-Phase 6 — InShape Revival
+Phase 5 — InShape Revival
 🟦 Path & Waypoint System
 🟦 Android App
 🟦 Movement Controller Module
@@ -98,8 +81,25 @@ Phase 6 — InShape Revival
 
 ==================================================
 
-Phase 7 — Polish & Packaging
+Phase 6 — Polish & Packaging
 🟦 Documentation
 🟦 Updater Scripts
 🟦 Installer Cleanup
 🟦 Grid Owner Guide
+
+==================================================
+
+Phase 7 — Viewer & Patching
+🔄 Draw Distance Patch
+
+Confirm patch points
+
+Add automated patcher to installer
+
+🟦 VergeGrid Viewer
+
+Pull Firestorm source
+
+Remove draw distance clamp
+
+Build branded binaries

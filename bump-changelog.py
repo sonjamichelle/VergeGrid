@@ -1,136 +1,234 @@
 #!/usr/bin/env python3
 """
-VergeGrid Changelog Auto-Bump Utility (Interactive v2.1)
---------------------------------------------------------
+VergeGrid Clean Git Changelog Generator (v4.1)
+----------------------------------------------
 Usage:
-    python bump_changelog.py [version]
+    python generate_changelog_clean.py [--limit N] [--tag] [--clean]
 
-If no version is provided:
-  - Parses CHANGELOG.md to detect the latest version.
-  - Suggests the next version (increments patch by default).
-  - Prompts for version and changelog sections interactively.
-
-Example:
-    python bump_changelog.py
+Features:
+  ✅ Strict version numbering (v0.0.xxx)
+  ✅ One changelog entry per release
+  ✅ Parses all commits since last tag (no missing entries)
+  ✅ Cleans duplicate headers and extra separators
+  ✅ Auto-creates first tag (v0.0.1) if none exist
+  ✅ Auto-creates next tag (optional with --tag)
+  ✅ Pretty VergeGrid changelog formatting
 """
 
+import subprocess
 import sys
 import re
 from datetime import datetime
 from pathlib import Path
 
-# Optional color support for nice terminal output
-try:
-    from colorama import Fore, Style, init
-    init(autoreset=True)
-except ImportError:
-    class Dummy:
-        def __getattr__(self, name): return ""
-    Fore = Style = Dummy()
-
 CHANGELOG_FILE = Path(__file__).parent / "CHANGELOG.md"
-
-TEMPLATE = """## [{version}] – {timestamp}
-### 🚀 Added
-{added}
-
-### 🛠️ Changed
-{changed}
-
-### 🧱 Internal Improvements
-{improvements}
-
-"""
-
-# --------------------------------------------------------------------
-# Helpers
-# --------------------------------------------------------------------
-def find_latest_version() -> str:
-    """Find latest version in CHANGELOG.md."""
-    if not CHANGELOG_FILE.exists():
-        return None
-    pattern = re.compile(r"## \[v?(\d+\.\d+\.\d+)\]")
-    for line in CHANGELOG_FILE.read_text(encoding="utf-8").splitlines():
-        match = pattern.match(line.strip())
-        if match:
-            return f"v{match.group(1)}"
-    return None
+BUILD_PREFIX = "VergeGrid Installer"
 
 
-def suggest_next_version(current: str) -> str:
-    """Suggest next patch version."""
-    try:
-        parts = [int(p) for p in current.lstrip("v").split(".")]
-        parts[-1] += 1
-        return f"v{'.'.join(map(str, parts))}"
-    except Exception:
-        return "v1.0.0"
+# ---------------------------------------------------------
+# Git Utilities
+# ---------------------------------------------------------
+def git(args):
+    res = subprocess.run(["git"] + args, capture_output=True, text=True)
+    if res.returncode != 0:
+        print(f"[WARN] git {' '.join(args)} failed: {res.stderr.strip()}")
+        return ""
+    return res.stdout.strip()
 
 
-def insert_entry(version: str, added: str, changed: str, improvements: str):
-    """Insert formatted entry into CHANGELOG.md."""
-    if not CHANGELOG_FILE.exists():
-        print(Fore.RED + "[ERROR] CHANGELOG.md not found." + Fore.RESET)
-        sys.exit(1)
+def latest_tag():
+    tags = git(["tag", "--sort=-creatordate"]).splitlines()
+    return tags[-1] if tags else None  # oldest → newest, take latest
 
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-    entry = TEMPLATE.format(
-        version=version,
-        timestamp=timestamp,
-        added=added.strip() or "-",
-        changed=changed.strip() or "-",
-        improvements=improvements.strip() or "-"
+
+def next_tag(prev):
+    if not prev:
+        return "v0.0.1"
+    m = re.match(r"v?0\.0\.(\d+)", prev)
+    if not m:
+        return "v0.0.1"
+    num = int(m.group(1)) + 1
+    return f"v0.0.{num}"
+
+
+def commits_since(tag=None):
+    fmt = "%h|%ad|%s"
+    args = ["log", "--pretty=format:" + fmt, "--date=short"]
+    if tag:
+        args.insert(1, f"{tag}..HEAD")
+    lines = git(args).splitlines()
+    commits = []
+    for line in lines:
+        parts = line.split("|", 2)
+        if len(parts) == 3:
+            commits.append({"hash": parts[0], "date": parts[1], "msg": parts[2].strip()})
+    return commits
+
+
+# ---------------------------------------------------------
+# Changelog Formatting
+# ---------------------------------------------------------
+def classify(msg):
+    msg_l = msg.lower()
+    if msg_l.startswith(("feat", "add", "✨")):
+        return "Added"
+    if msg_l.startswith(("fix", "bug", "🛠")):
+        return "Fixed"
+    if msg_l.startswith(("update", "improve", "refactor", "change", "🧱", "🧩", "chore")):
+        return "Improved"
+    if msg_l.startswith(("build", "ci", "internal")):
+        return "Internal"
+    return "Other"
+
+
+def build_entry(tag, commits):
+    today = datetime.now()
+    date = today.strftime("%Y-%m-%d")
+    build = today.strftime("%Y.%m.%d.%H%M") + "a"
+
+    sections = {"Added": [], "Fixed": [], "Improved": [], "Internal": [], "Other": []}
+    for c in commits:
+        cat = classify(c["msg"])
+        entry = f"- {c['msg']}  ({c['hash']})"
+        if entry not in sections[cat]:
+            sections[cat].append(entry)
+
+    lines = [
+        f"## [{tag}] [{date}] {BUILD_PREFIX} — Build {build}\n",
+    ]
+
+    for sec in ["Added", "Fixed", "Improved", "Internal", "Other"]:
+        if sections[sec]:
+            lines.append(f"### {sec}")
+            lines.extend(sections[sec])
+            lines.append("")  # spacing
+
+    lines.append("---\n")
+    return "\n".join(lines).strip() + "\n"
+
+
+# ---------------------------------------------------------
+# File Operations
+# ---------------------------------------------------------
+def ensure_header():
+    """Ensure changelog starts with VergeGrid header."""
+    header = (
+        "# VergeGrid Modular Installer — CHANGELOG\n\n"
+        "All notable changes are auto-generated from Git commits.\n\n---\n\n"
     )
-
-    lines = CHANGELOG_FILE.read_text(encoding="utf-8").splitlines(keepends=True)
-    insert_index = 0
-
-    for i, line in enumerate(lines):
-        if line.strip().startswith("## ["):
-            insert_index = i
-            break
-
-    new_content = []
-    new_content.extend(lines[:insert_index])
-    new_content.append("\n" + entry + "\n")
-    new_content.extend(lines[insert_index:])
-
-    CHANGELOG_FILE.write_text("".join(new_content), encoding="utf-8")
-
-    print(Fore.GREEN + f"\n[OK] Added changelog entry for {version}" + Fore.RESET)
-    print(Fore.CYAN + f"  → Timestamp: {timestamp}" + Fore.RESET)
-    print(Fore.CYAN + f"  → Written to: {CHANGELOG_FILE}" + Fore.RESET)
+    if not CHANGELOG_FILE.exists():
+        CHANGELOG_FILE.write_text(header, encoding="utf-8")
+        return header
+    content = CHANGELOG_FILE.read_text(encoding="utf-8")
+    if not content.startswith("# VergeGrid Modular Installer"):
+        content = header + content
+        CHANGELOG_FILE.write_text(content, encoding="utf-8")
+    return content
 
 
-# --------------------------------------------------------------------
-# Main
-# --------------------------------------------------------------------
+def write_entry(entry):
+    content = ensure_header()
+    # Insert new entry after the header
+    parts = re.split(r"(?=^## )", content, maxsplit=1, flags=re.MULTILINE)
+    new_content = parts[0].rstrip() + "\n\n" + entry
+    if len(parts) > 1:
+        new_content += parts[1]
+    CHANGELOG_FILE.write_text(new_content.strip() + "\n", encoding="utf-8")
+    print(f"[OK] Updated {CHANGELOG_FILE}")
+
+
+def clean_changelog():
+    """Deduplicate entries, collapse extra separators, and enforce structure."""
+    if not CHANGELOG_FILE.exists():
+        print("[WARN] No changelog found to clean.")
+        return
+
+    text = CHANGELOG_FILE.read_text(encoding="utf-8")
+
+    # Remove duplicate separators
+    text = re.sub(r"(\n---+\n)+", "\n---\n", text)
+
+    # Remove duplicate headers
+    seen = set()
+    blocks = re.split(r"(?=^## \[v0\.0\.\d+\])", text, flags=re.MULTILINE)
+    cleaned_blocks = []
+    for block in blocks:
+        if not block.strip():
+            continue
+        m = re.match(r"^## \[v0\.0\.\d+\]", block.strip())
+        if m:
+            tag = m.group(0)
+            if tag in seen:
+                continue
+            seen.add(tag)
+        cleaned_blocks.append(block.strip())
+
+    cleaned_text = "\n\n".join(cleaned_blocks).strip() + "\n"
+    CHANGELOG_FILE.write_text(cleaned_text, encoding="utf-8")
+    print("[OK] Cleaned and normalized changelog formatting.")
+
+
+def create_tag(tag, push=False):
+    msg = f"{BUILD_PREFIX} Release {tag}"
+    subprocess.run(["git", "tag", "-a", tag, "-m", msg])
+    print(f"[OK] Created local tag {tag}")
+    if push:
+        subprocess.run(["git", "push", "origin", tag])
+        print(f"[OK] Pushed tag {tag} to origin")
+
+
+# ---------------------------------------------------------
+# Main Entry Point
+# ---------------------------------------------------------
+def main():
+    args = sys.argv[1:]
+    clean = "--clean" in args
+    auto_tag = "--tag" in args
+    limit = 500
+
+    if "--limit" in args:
+        try:
+            limit = int(args[args.index("--limit") + 1])
+        except Exception:
+            pass
+
+    if clean:
+        clean_changelog()
+        return
+
+    prev_tag = latest_tag()
+
+    # 🔧 Auto-create initial tag if none exists
+    if not prev_tag:
+        print("[INFO] No existing tags found — creating initial v0.0.1 tag...")
+        create_tag("v0.0.1", push=auto_tag)
+        prev_tag = "v0.0.1"
+
+    next_ver = next_tag(prev_tag)
+    print(f"[INFO] Latest tag: {prev_tag} → Next: {next_ver}")
+
+    # Gather commits since last tag
+    commits = commits_since(prev_tag)
+    if not commits:
+        print("[INFO] No new commits found. Nothing to write.")
+        return
+
+    # Trim to limit (optional)
+    commits = commits[:limit]
+
+    # Build and write changelog entry
+    entry = build_entry(next_ver, commits)
+    write_entry(entry)
+
+    # Cleanup old mess if exists
+    clean_changelog()
+
+    # Optional tagging
+    if auto_tag:
+        create_tag(next_ver, push=True)
+    else:
+        print(f"[INFO] Skipped tag creation. Run with --tag to push {next_ver}.")
+
+
 if __name__ == "__main__":
-    print(Style.BRIGHT + Fore.CYAN + "\n=== VergeGrid Changelog Auto-Bump Utility ===" + Fore.RESET)
-
-    latest = find_latest_version()
-    suggested = suggest_next_version(latest) if latest else "v1.0.0"
-
-    if latest:
-        print(Fore.YELLOW + f"Last version detected: {latest}" + Fore.RESET)
-        print(Fore.GREEN + f"Suggested next version: {suggested}\n" + Fore.RESET)
-    else:
-        print(Fore.RED + "No previous version found — starting new changelog.\n" + Fore.RESET)
-
-    # --- Prompt for version ---
-    if len(sys.argv) > 1:
-        version = sys.argv[1]
-    else:
-        version = input(f"Enter new version [{suggested}]: ").strip() or suggested
-
-    # --- Prompt for changelog sections ---
-    print("\nEnter changelog notes (press Enter to skip any section):")
-    added = input(Fore.CYAN + "  🚀 Added: " + Fore.RESET).strip() or "-"
-    changed = input(Fore.YELLOW + "  🛠️ Changed: " + Fore.RESET).strip() or "-"
-    improvements = input(Fore.MAGENTA + "  🧱 Internal Improvements: " + Fore.RESET).strip() or "-"
-
-    # Auto-format bullet points
-    def format_line(x): return x if x.startswith("-") or x == "-" else f"- {x}"
-    added, changed, improvements = map(format_line, [added, changed, improvements])
-
-    insert_entry(version, added, changed, improvements)
+    main()

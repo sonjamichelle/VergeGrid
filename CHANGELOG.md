@@ -1,305 +1,59 @@
 # VergeGrid Modular Installer — CHANGELOG
-All notable changes to the VergeGrid Modular Installer system are documented here.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),  
-and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes are auto-generated from Git commits.
 
 ---
 
-## [0.0.12] – 2025-11-18 1213 - vergegrid-install-py refinements
-### Added
-- Full automation of VergeGrid installer with structured progress output.
-- Automated handling of OpenSim.ini, GridCommon.ini, and GridHypergrid.ini generation.
-- Automatic sequential execution of all core setup scripts without user input.
+## [v0.0.2] [2025-11-18] VergeGrid Installer — Build 2025.11.18.1308a
 
-### Changed
-- Removed all confirmation prompts except the initial install path selection.
-- Core stack installation (MySQL → Apache → PHP → OpenSim) now executes automatically.
-- Added clear step banners ([STEP X]) for better progress visibility.
-- Installer now aborts automatically on any script failure with consistent logging.
+### Added
+- feat(installer): finalize modular installer and core OpenSim initialization  (298348e)
 
 ### Improved
-- Greatly simplified user experience — complete unattended install flow.
-- Ready for continuous deployment or CI/CD integration.
-- Installation log includes full trace of each executed setup component.
+- refactor(installer): fully automate VergeGrid installation workflow (zero confirmations)  (b348e92)
 
-### Notes
-After installation, users can manually launch their simulator with:
+### Other
+- secure clean out  (52eb16a)
 
+**Build Summary:**  Introduces new features and functionality; also includes enhances performance and user experience.
 
-## [v0.0.11] – 2025-11-18 1203 - OpenSim.Exe Prep
+---
+
+## [v0.0.1] [2025-11-18] VergeGrid Installer — Build 2025.11.18.1308a
+
 ### Added
-- `init-core.py`: Core OpenSim configuration validator and patcher.
-- Automated creation of `OpenSim.ini`, `GridCommon.ini`, and `GridHypergrid.ini`.
-- Optional automatic launch of the first region (`Moonlight Landing`).
-
-### Changed
-- Installer now runs `init-core.py` before `verify-db-robust.py` for stability.
-- `[SimulationDataStore]` defaults to MySQL instead of Null provider.
-- Robust verification no longer terminates early, allowing subsequent steps
-  (god user + estate creation) to complete while Robust.exe runs.
-- Improved region initialization sequence to support DreamGrid-style estates.
+- added changelog and bumper  (d8136cf)
+- feat(changelog): add timestamp and full interactive workflow to bump_changelog.py  (bc65e24)
+- feat(envmgr): add explicit cancel sentinel and exit code for installer integration  (e510408)
+- feat(installer): restore and enhance Robust verification + interactive drive selection  (ef4dbfe)
+- feat(mysql): grant DBManager, DBDesigner, and BackupAdmin privileges to service users  (0ab48b1)
 
 ### Fixed
-- Resolved fatal startup error:
+- fix(installer): handle user cancellation from Environment Manager gracefully  (62e5f84)
+- fix(installer): detect Environment Manager path automatically and abort on cancel  (a547ab2)
+- fix(installer): hard fail if Environment Manager missing; kill process tree on cancel  (110f8e5)
 
-### [v0.0.10] – 2025-11-18 0959 Secure MySQL root, admin and server users
-
-### Added
-- DBManager, DBDesigner, BackupAdmin privilege sets for robustuser and opensimuser
 ### Improved
-- Enhanced role-based security for MySQL provisioning
-- Maintains compatibility with automated VergeGrid installer
-- Simplified privilege model for OpenSim database management
+- Update vergegrid-installer.py  (45bb451)
+- Update vergegrid-installer.py  (664ba09)
+- Update vergegrid-installer.py  (e713e9f)
+- Update CHANGELOG.md  (e3672e3)
+- refactor(installer): enhance service initialization, schema verification, and graceful shutdown logic  (34553d1)
+- chore(gitignore): exclude creds.conf, logs, and temporary installer data for security  (92be01c)
 
-## [v0.9.9] – 2025-11-18 0933 Secure Mysql
+### Other
+- Initial commit  (e6056cd)
+- Initial Upload  (7c46406)
+- Docs  (c598dc0)
+- More Docs  (a89aa93)
+- Structure Cleanup  (23074d4)
+- path sanity checks  (da41219)
+- dynamic script entry  (74911c9)
+- fa  (623548e)
+- Merge branch 'main' of https://github.com/sonjamichelle/VergeGrid  (f217b74)
+- Delete Installer.zip  (353d3c2)
+- secure mysql, services change  (a67d55b)
 
-### Added
-- `secure_mysql_root.py` major upgrade:
-  - Automates creation of MySQL service users (`vergeadmin`, `robustuser`, `opensimuser`)
-  - Implements strong password policy enforcement and confirmation
-  - Writes hashed credentials to `creds.conf` for secure offline storage
-  - Automatically patches OpenSim configuration files:
-    - `GridCommon.ini`
-    - `Robust.ini`
-    - `Robust.HG.ini`
-  - Self-installs missing `mysql-connector-python`
-  - Comprehensive logging and error handling for Windows environment
-### Changed
-- Replaced manual MySQL setup with full automated hardening phase (Step 7 integration)
-### Security
-- Root password protection + strict least-privilege database roles
-- All credentials now stored SHA-256 hashed
-
-
-##  [v0.9.8] [2025-11-18] VergeGrid Installer — Build 2025.11.18a
-
-### ✨ Added
-- **Dynamic service setup:**  
-  `init-services.py` now reads the actual installation root (`install_path.txt`) set by the user and correctly registers MySQL, Apache, and Robust as Windows services with automatic cleanup of older instances.
-
-- **Dynamic process countdowns:**  
-  `verify-db-robust.py` now includes a live, real-time countdown for schema creation and re-verification. Countdown starts only once `Robust.exe` is confirmed active.
-
-- **Dynamic shutdown timer:**  
-  Graceful shutdown delay now matches the duration of the database verification process, rounded up to the nearest second.
-
-### 🛠️ Improved
-- More robust startup verification for `Robust.exe` using CPU utilization tracking.
-- Better console user experience — live status messages, emoji feedback, and safe exit on early process failure.
-- Consistent logging structure across installer modules.
-
-### 🧩 Internal
-- Installer now persists `install_path.txt` for downstream components.
-- Minor refactoring for readability and modularity in `vergegrid-installer.py`.
+**Build Summary:**  Minor maintenance and adjustments; also includes enhances performance and user experience.
 
 ---
-**Build Summary:**  
-Improves installer stability, service accuracy, and UX responsiveness during grid setup and schema initialization.
-
-
-## [v0.9.7] – 2025-11-18 06:49 UTC
-
-### 🛠️ Changed
-- Installer now hard-fails if Environment Manager is missing instead of skipping
-- Added full process tree kill on user cancellation or failure
-- Removed spurious `[WARN] Environment Manager not found` message
-
-### 🧱 Internal Improvements
-- Improved environment manager path detection
-- Unified cancel/abort behavior across all VergeGrid installer phases
-
-## [v0.9.5] – 2025-11-18 06:08 UTC
-
-### 🛠️ Changed
-- Installer now auto-detects Environment Manager location across setup hierarchy
-- Fixed false "Environment Manager not found" warning
-- Installer halts correctly when cleanup is cancelled by user
-
-### 🧱 Internal Improvements
-- Unified path resolution for setup utilities
-- Hardened subprocess control and sentinel detection
-
-## [v0.9.4] – 2025-11-18 05:52 UTC
-
-### 🛠️ Changed
-- Installer now properly detects and halts on user cancellation from Environment Manager
-- Added pre-install Environment Manager integration phase
-- Updated run_component() to respect sentinel `::VERGEGRID_CANCELLED::` and exit code 111
-
-### 🧱 Internal Improvements
-- Improved subprocess handling for safer cleanup and installation workflows
-- Ensured consistent termination behavior across all VergeGrid installer modules
-
-## [v0.9.3] – 2025-11-18 05:17 UTC
-
-### Added
-- Explicit cancel sentinel `::VERGEGRID_CANCELLED::` for installer subprocess detection
-- Unique exit code `111` to signal user abort to parent process
-
-### Fixed
-- Prevented installer from continuing execution after user cancels Environment Manager
-- Improved integration safety between cleanup and installer workflows
-
-
-## [v0.9.3] – 2025-11-18 04:09
-### 🚀 Added
-- CHANGELOG version entry timestamp.
-
-### 🛠️ Changed
-- Changes this: ## [v0.X.X] - 2025-11-18  to this:  ## [v0.X.X] - 2025-11-18 2155
-
-### 🧱 Internal Improvements
-- more concise.
-
-
-## [v0.9.2] – 2025-11-18
-### 🚀 Added
-- changed the script from a oneline entry into a prompt flow. Parses for last version, suggests new version, asks for description, then changes, then improvements.
-
-### 🛠️ Changed
-- Parses for last version, suggests new version, asks for description, then changes, then improvements.
-
-### 🧱 Internal Improvements
-- Less Guesswork. More passed on information. Less Copy/Paste to do.
-
-
-## [v0.9.1] – 2025-11-18
-### 🚀 Added
-- Added bump-changelog.py script
-
-### 🛠️ Changed
-- 
-
-### 🧱 Internal Improvements
-- 
-
-
-## [v0.9.0] – 2025-11-18
-### 🚀 Added
-- **Dynamic Installation Root Architecture**
-  - All setup scripts now accept `<install_root>` via CLI arguments.
-  - Fully supports installations on any drive and custom folder (e.g. `E:\GridOne`, `C:\Sandbox\VergeGrid`).
-  - Introduced environment variable `VERGEGRID_INSTALL_ROOT` for cross-process consistency.
-- **Unified Entry Point Standard**
-  - All modules now share this entry structure:
-    ```python
-    if len(sys.argv) < 2:
-        print("Usage: python <script>.py <install_root>")
-        sys.exit(1)
-    ```
-  - Standardized startup banners, usage hints, and error handling.
-- **Centralized Logging**
-  - All components write to `<install_root>\Logs\vergegrid-install.log`.
-  - Consistent per-install logging across MySQL, OpenSim, Apache, PHP, and SSL stages.
-- **Finalized Step Order**
-  - Reordered main installer to place **OpenSim as final setup phase**.
-  - Added **Step 7: `verify-db-robust.py`** for post-install database and service verification.
-
-### 🛠️ Changed
-- Removed all hardcoded paths (`C:\VergeGrid`, `D:\VergeGrid`) from every module.
-- Updated `select_install_drive()`:
-  - Now prompts for drive and install directory name.
-  - Automatically creates directories.
-- Enhanced `run_component()` for cleaner exit and failure handling.
-- Improved admin privilege check (auto elevation if not admin).
-- Revised service creation in `init-opensim-services.py` for manual-start mode.
-- Adjusted SSL scripts (`init-ssl-apache.py`, `init-ssl-opensim.py`) for dynamic paths and certificate discovery.
-
-### 🧱 Internal Improvements
-- Consistent exit codes (`sys.exit(0/1)`) in all components.
-- Safe subprocess error handling and tracebacks for all init scripts.
-- Improved MySQL initialization with automatic PyMySQL dependency resolution.
-- Verified full cross-module compatibility under dynamic install roots.
-
-### ✅ Verified Compatibility
-- Works seamlessly under the main modular installer orchestrator:
-  - `fetch-mysql.py`
-  - `init-mysql.py`
-  - `fetch-opensim.py`
-  - `init-opensim.py`
-  - `init-opensim-services.py`
-  - `fetch-apache.py`
-  - `fetch-php.py`
-  - `init-apache-php.py`
-  - `fetch-letsencrypt.py`
-  - `init-ssl-apache.py`
-  - `init-ssl-opensim.py`
-  - `verify-db-robust.py`
-
----
-
-## [v0.8.0] – 2025-10-14
-### 🚀 Added
-- **OpenSim & MySQL Integration**
-  - Introduced `init-opensim.py` and `init-mysql.py` for automated fetch, extraction, and base configuration.
-  - Added automated MySQL insecure initialization (no password) for dev environments.
-- **Robust Service Registration**
-  - Added `init-opensim-services.py` to create the `VergeGridRobust` Windows service.
-  - Generates debug launcher batch file `launch_robust_debug.bat` for manual service runs.
-- **INI Validation**
-  - Checks existence and size of `Robust.ini` and `GridCommon.ini` before continuing setup.
-  - Graceful failure and logging if configs are missing or malformed.
-
-### 🧩 Changed
-- Moved OpenSim initialization logic out of the MySQL phase for modular execution.
-- Added `common.write_log()` wrapper for uniform logging.
-- Extended `run_component()` to display output and capture return codes.
-
----
-
-## [v0.7.0] – 2025-09-22
-### 🚀 Added
-- **Apache + PHP Stack Fetchers**
-  - `fetch-apache.py` and `fetch-php.py` introduced to handle download and extraction.
-  - `init-apache-php.py` added to link PHP with Apache automatically (mod_php or CGI mode).
-- **SSL Integration Base**
-  - Added `fetch-letsencrypt.py` to install and configure `win-acme` ACME client for Windows.
-  - Stubbed `init-ssl-apache.py` and `init-ssl-opensim.py` for later enhancement.
-
-### 🛠️ Changed
-- Updated installer orchestration to include Apache and PHP after MySQL/OpenSim setup.
-- Unified naming conventions across all setup modules.
-- Centralized all fetcher logs under `<install_root>\Logs`.
-
----
-
-## [v0.6.0] – 2025-09-10
-### 🚀 Added
-- **Initial Modular Installer Framework**
-  - `vergegrid_installer.py` created as the top-level orchestrator.
-  - Handles drive detection, selection, and confirmation prompts.
-  - Modular sequencing for MySQL, OpenSim, Apache, PHP, and SSL.
-- **Common Utilities Module (`common.py`)**
-  - Added centralized logging, timestamped file creation, and error recording.
-  - Helper functions `set_log_file()`, `write_log()`, and `confirm()`.
-- **Admin Elevation**
-  - Added Windows UAC check and auto elevation via `ctypes.windll.shell32.ShellExecuteW`.
-
-### 🧩 Changed
-- Introduced `run_component()` abstraction for subprocess-based modular execution.
-- Standardized console messages for all installation steps.
-
----
-
-## [v0.5.0] – 2025-08-25
-### 🚀 Added
-- **VergeGrid Windows Setup Architecture Inception**
-  - Created project scaffolding and initial folder layout under `/setup/`.
-  - Implemented path detection logic to locate VergeGrid root dynamically.
-  - Initial fetcher scripts for MySQL and OpenSim modules.
-  - Introduced logging and version banners for modular install flow.
-
----
-
-## [Unreleased]
-### Planned
-- Add secure password handling via `secure-mysql.py`.
-- Introduce silent installer flag for non-interactive deployment.
-- Per-component log separation in `/Logs/components/`.
-- Config integrity verification and automatic repair.
-- Built-in version detection and update mechanism.
-
----
-
-© 2025 VergeGrid Installer Project — *Sonja + GPT Collaboration*

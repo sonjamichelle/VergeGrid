@@ -81,7 +81,12 @@ server-id=1
 def run_cmd(cmd, cwd=None, timeout=None, label="CMD"):
     """Run a subprocess with live output streaming and full logging."""
     log = _get_logger()
-    log_dir = Path("D:/VergeGrid/MySQL/logs")
+
+    # Dynamic log directory based on install_root if available
+    default_log_dir = Path.cwd() / "MySQL" / "logs"
+    log_dir = os.environ.get("VERGEGRID_INSTALL_ROOT", str(default_log_dir))
+    log_dir = Path(log_dir) / "MySQL" / "logs"
+
     os.makedirs(log_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_file = log_dir / f"{label.replace(' ', '_')}_{timestamp}.log"
@@ -234,11 +239,9 @@ def setup_mysql(root: Path):
     if not start_mysql_service():
         return False
 
-    # Skip any password or ALTER USER logic
     log(Fore.YELLOW + "[SKIP] Secure password setup skipped (insecure mode enabled)." + Fore.RESET)
     mysql_exe = mysql_root / "bin" / "mysql.exe"
 
-    # Verify MySQL accepts connections
     log(Fore.YELLOW + "[TEST] Verifying MySQL root login (no password)..." + Fore.RESET)
     for i in range(30):
         test = subprocess.run(
@@ -261,14 +264,19 @@ def setup_mysql(root: Path):
 
 
 # ============================================================
-# Standalone Mode
+# Entry Point (Dynamic)
 # ============================================================
 
 if __name__ == "__main__":
-    print(Style.BRIGHT + Fore.CYAN + "\n=== VergeGrid MySQL Standalone Setup (Insecure Mode) ===" + Fore.RESET)
-    root = Path("D:\\VergeGrid")
-    os.makedirs(root, exist_ok=True)
-    if setup_mysql(root):
+    print(Style.BRIGHT + Fore.CYAN + "\n=== VergeGrid MySQL Initialization (Dynamic Insecure Mode) ===" + Fore.RESET)
+    if len(sys.argv) < 2:
+        print("Usage: python init-mysql.py <install_root>")
+        sys.exit(1)
+
+    install_root = Path(sys.argv[1])
+    os.environ["VERGEGRID_INSTALL_ROOT"] = str(install_root)
+
+    if setup_mysql(install_root):
         print(Fore.GREEN + "[COMPLETE] MySQL setup finished successfully (insecure mode)." + Fore.RESET)
     else:
-        print(Fore.RED + "[FAILED] MySQL setup encountered errors. Check D:\\VergeGrid\\MySQL\\logs." + Fore.RESET)
+        print(Fore.RED + f"[FAILED] MySQL setup encountered errors. Check {install_root}\\MySQL\\logs." + Fore.RESET)

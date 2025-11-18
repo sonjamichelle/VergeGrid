@@ -19,8 +19,6 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 # --- End Fix ---
 
-import os
-import sys
 import shutil
 import time
 import subprocess
@@ -74,8 +72,10 @@ def restart_apache_service():
 # ------------------------------------------------------------
 # Core Function
 # ------------------------------------------------------------
-def init_ssl_apache(install_root):
+def init_ssl_apache(install_root: Path):
     install_root = Path(install_root).resolve()
+    os.environ["VERGEGRID_INSTALL_ROOT"] = str(install_root)
+
     apache_root = install_root / "Apache"
     letsencrypt_root = install_root / "LetsEncrypt"
     logs_root = install_root / "Logs"
@@ -108,7 +108,6 @@ def init_ssl_apache(install_root):
     cert_file = None
     key_file = None
 
-    # Search VergeGrid\LetsEncrypt\config and VergeGrid\Apache\conf\ssl
     for path in [letsencrypt_root, ssl_dir]:
         pem_files = list(path.glob("*.pem")) + list(path.glob("*.crt")) + list(path.glob("*.cer"))
         key_files = list(path.glob("*.key"))
@@ -158,23 +157,23 @@ def init_ssl_apache(install_root):
     print("\n✓ Apache SSL configuration complete.")
     print("Visit: https://localhost/  (ignore self-signed warnings if testing)\n")
     common.write_log("[SUCCESS] Apache SSL configuration completed successfully.")
+    return 0
 
 
 # ------------------------------------------------------------
-# Entry Point
+# Entry Point (Dynamic)
 # ------------------------------------------------------------
 if __name__ == "__main__":
+    print("\n=== VergeGrid Apache SSL Initializer (Dynamic Mode) ===")
     if len(sys.argv) < 2:
         print("Usage: python init-ssl-apache.py <install_root>")
         sys.exit(1)
 
+    install_root = Path(sys.argv[1])
     try:
-        init_ssl_apache(sys.argv[1])
-        print("\n✓ Apache SSL initialization successful.\n")
-        sys.exit(0)
+        sys.exit(init_ssl_apache(install_root))
     except Exception as e:
         import traceback
-
         traceback.print_exc()
         common.write_log(f"[FATAL] Apache SSL initialization failed: {e}", "ERROR")
         print(f"\n[FATAL] Apache SSL initialization failed: {e}\n")

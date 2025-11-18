@@ -29,10 +29,11 @@ except ModuleNotFoundError:
 # MySQL Compatibility Check
 # ------------------------------------------------------------
 def ensure_mysql_native_password(user="root", password="", host="localhost"):
+    """Check MySQL connectivity using PyMySQL; auto-installs if missing."""
     try:
         import pymysql
     except ImportError:
-        print("Installing PyMySQL dependency...")
+        print("[INFO] Installing missing dependency: PyMySQL ...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "PyMySQL"])
         import pymysql
 
@@ -77,8 +78,11 @@ def create_service(name, bin_path, display_name, description):
 # ------------------------------------------------------------
 # Main Routine
 # ------------------------------------------------------------
-def init_opensim_services(install_root):
+def init_opensim_services(install_root: Path):
+    """Initialize and register VergeGrid Robust service (manual start)."""
     install_root = Path(install_root).resolve()
+    os.environ["VERGEGRID_INSTALL_ROOT"] = str(install_root)
+
     opensim_root = install_root / "OpenSim" / "bin"
     logs_root = install_root / "Logs"
     os.makedirs(logs_root, exist_ok=True)
@@ -137,15 +141,15 @@ pause
 
 
 # ------------------------------------------------------------
-# Entry Point
+# Entry Point (Dynamic)
 # ------------------------------------------------------------
 if __name__ == "__main__":
+    print("\n=== VergeGrid OpenSim Services Initializer (Dynamic Mode) ===")
     if len(sys.argv) < 2:
-        print("Usage:")
-        print("  python init-opensim-services.py <install_root>")
+        print("Usage: python init-opensim-services.py <install_root>")
         sys.exit(1)
 
-    install_root = sys.argv[1]
+    install_root = Path(sys.argv[1])
     try:
         sys.exit(init_opensim_services(install_root))
     except Exception as e:

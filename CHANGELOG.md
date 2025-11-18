@@ -6,6 +6,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ---
 
+## [v0.0.11] – 2025-11-18 1203 - OpenSim.Exe Prep
+### Added
+- `init-core.py`: Core OpenSim configuration validator and patcher.
+- Automated creation of `OpenSim.ini`, `GridCommon.ini`, and `GridHypergrid.ini`.
+- Optional automatic launch of the first region (`Moonlight Landing`).
+
+### Changed
+- Installer now runs `init-core.py` before `verify-db-robust.py` for stability.
+- `[SimulationDataStore]` defaults to MySQL instead of Null provider.
+- Robust verification no longer terminates early, allowing subsequent steps
+  (god user + estate creation) to complete while Robust.exe runs.
+- Improved region initialization sequence to support DreamGrid-style estates.
+
+### Fixed
+- Resolved fatal startup error:
+
 ### [v0.0.10] – 2025-11-18 0959 Secure MySQL root, admin and server users
 
 ### Added

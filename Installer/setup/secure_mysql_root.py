@@ -5,34 +5,45 @@
 # Includes:
 #   - MySQL root password hardening
 #   - Creation of vergeadmin, robustuser, opensimuser accounts
-#   - Role-based privilege grants (DBManager, DBDesigner, BackupAdmin)
-#   - Automatic OpenSim configuration patch (GridCommon.ini, Robust.ini, Robust.HG.ini)
+#   - Grants DBManager, DBDesigner, BackupAdmin equivalent privileges
+#   - AES-encrypted password vault (vault.key + creds.conf)
 # ==============================================================
 
+import os
 import re
 import sys
-import os
 import hashlib
 import logging
 import subprocess
 from configparser import ConfigParser
 
 # --------------------------------------------------------------
-# Ensure mysql-connector-python is installed (self-healing)
+# Ensure dependencies (auto-install if missing)
 # --------------------------------------------------------------
-try:
-    import mysql.connector
-except ImportError:
-    print("[INFO] Missing dependency: mysql-connector-python. Installing automatically...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
-    subprocess.run([sys.executable, "-m", "pip", "install", "mysql-connector-python"], check=True)
-    import mysql.connector
+def ensure_package(pkg_name, import_name=None):
+    """Ensure a Python package is installed; install if missing."""
+    try:
+        __import__(import_name or pkg_name)
+    except ImportError:
+        print(f"[INFO] Installing missing dependency: {pkg_name}...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
+        subprocess.run([sys.executable, "-m", "pip", "install", pkg_name], check=True)
+
+ensure_package("mysql-connector-python", "mysql.connector")
+ensure_package("cryptography")
 
 # --------------------------------------------------------------
-# Setup absolute log file path (Windows-safe)
+# Safe imports now that dependencies exist
+# --------------------------------------------------------------
+import mysql.connector
+from cryptography.fernet import Fernet
+
+# --------------------------------------------------------------
+# Logging and paths
 # --------------------------------------------------------------
 base_dir = os.path.dirname(os.path.abspath(__file__))
 log_file = os.path.join(base_dir, "vergegrid_install.log")
+vault_file = os.path.join(base_dir, "vault.key")
 
 logging.basicConfig(
     filename=log_file,
@@ -42,12 +53,32 @@ logging.basicConfig(
 )
 
 # --------------------------------------------------------------
-# Password Validation Function
+# Encryption helpers
+# --------------------------------------------------------------
+def get_or_create_key():
+    """Create or load VergeGrid's AES encryption key."""
+    if not os.path.exists(vault_file):
+        key = Fernet.generate_key()
+        with open(vault_file, "wb") as f:
+            f.write(key)
+        print("[INFO] Created new VergeGrid encryption key: vault.key")
+    else:
+        with open(vault_file, "rb") as f:
+            key = f.read()
+    return Fernet(key)
+
+def encrypt_password(fernet, pw):
+    return fernet.encrypt(pw.encode()).decode()
+
+def decrypt_password(fernet, token):
+    return fernet.decrypt(token.encode()).decode()
+
+# --------------------------------------------------------------
+# Password validation
 # --------------------------------------------------------------
 def validate_password(pw: str) -> bool:
-    """Ensure password meets VergeGrid security policy."""
     if len(pw) < 12:
-        print("❌ Password too short. Minimum 12 characters required.")
+        print("❌ Password too short (min 12 chars).")
         return False
     if not re.search(r"[A-Z]", pw):
         print("❌ Must contain at least one uppercase letter.")
@@ -64,22 +95,20 @@ def validate_password(pw: str) -> bool:
     return True
 
 # --------------------------------------------------------------
-# Collect and confirm password input (looping until valid)
+# Prompt for password
 # --------------------------------------------------------------
 def collect_password(user_label):
-    """Prompt repeatedly until a valid, matching password is entered."""
+    """Prompt until a valid password is entered."""
     while True:
         pw1 = input(f"Enter password for {user_label}: ")
         pw2 = input(f"Re-enter password for {user_label} to confirm: ")
 
         if pw1 != pw2:
-            print(f"❌ Passwords for {user_label} do not match. Please try again.\n")
+            print("❌ Passwords do not match.\n")
             continue
-
         if not validate_password(pw1):
-            print(f"❌ {user_label} password validation failed. Please try again.\n")
+            print(f"❌ {user_label} password validation failed.\n")
             continue
-
         print(f"✅ Password accepted for {user_label}.\n")
         return pw1
 
@@ -98,51 +127,37 @@ def patch_connection_file(file_path, replacements):
 
         for keyword, creds in replacements.items():
             user, pw = creds
-            pattern_user = re.compile(r"(User ID=).*?;", re.IGNORECASE)
-            pattern_pass = re.compile(r"(Password=).*?;", re.IGNORECASE)
-
-            if keyword in file_path.lower() or keyword in content.lower():
-                content = pattern_user.sub(rf"\1{user};", content)
-                content = pattern_pass.sub(rf"\1{pw};", content)
+            content = re.sub(r"(User ID=).*?;", rf"\1{user};", content, flags=re.IGNORECASE)
+            content = re.sub(r"(Password=).*?;", rf"\1{pw};", content, flags=re.IGNORECASE)
 
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
 
-        logging.info(f"Patched MySQL credentials in {file_path}")
-        print(f"[OK] Updated connection strings in: {file_path}")
+        print(f"[OK] Updated credentials in {file_path}")
+        logging.info(f"Patched credentials in {file_path}")
         return True
     except Exception as e:
-        logging.warning(f"Failed to patch {file_path}: {e}")
         print(f"[WARN] Could not patch {file_path}: {e}")
+        logging.warning(f"Failed to patch {file_path}: {e}")
         return False
 
 # --------------------------------------------------------------
-# Main Routine
+# Main MySQL setup routine
 # --------------------------------------------------------------
 def change_root_password_and_create_users():
     print("\n=== VergeGrid MySQL Security Setup (Windows) ===")
     print("Connecting to MySQL as root (no password)...")
 
+    # Connect without password
     try:
-        conn = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="",
-            connection_timeout=5
-        )
+        conn = mysql.connector.connect(host="localhost", user="root", password="")
         cursor = conn.cursor()
     except mysql.connector.Error as err:
-        logging.error(f"MySQL connection failed: {err}")
-        print(f"\n[ERROR] Unable to connect to MySQL: {err}")
-        print("Make sure MySQL is installed and the service is running (services.msc).")
+        print(f"[ERROR] Could not connect to MySQL: {err}")
         sys.exit(1)
 
-    # --- Step 1: Secure root ---
-    print("\n✅ Connected successfully. Let's secure your MySQL root user.\n")
-    print("Example strong passwords:")
-    print("  • t!G7@qK$2vPz")
-    print("  • Cyb3r^Grid#99")
-    print("  • n0va*Pulse!42\n")
+    print("\n✅ Connected successfully.")
+    print("Let's secure your MySQL root user.\n")
 
     root_pw = collect_password("root (MySQL superuser)")
 
@@ -151,30 +166,18 @@ def change_root_password_and_create_users():
         cursor.execute("FLUSH PRIVILEGES;")
         conn.commit()
         print("✅ MySQL root password updated successfully.\n")
-        logging.info("MySQL root password successfully updated (Windows).")
     except mysql.connector.Error as err:
-        logging.error(f"Failed to update MySQL root password: {err}")
-        print(f"[ERROR] MySQL command failed: {err}")
+        print(f"[ERROR] Failed to update MySQL root password: {err}")
         sys.exit(1)
     finally:
         cursor.close()
         conn.close()
 
-    # --- Step 2: Reconnect with new root credentials ---
+    # Reconnect with new root credentials
     print("🔐 Reconnecting with new root password to create user accounts...\n")
-    try:
-        conn = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password=root_pw
-        )
-        cursor = conn.cursor()
-    except mysql.connector.Error as err:
-        logging.error(f"Reconnection failed with new root credentials: {err}")
-        print(f"[ERROR] Could not reconnect with new root password: {err}")
-        sys.exit(1)
+    conn = mysql.connector.connect(host="localhost", user="root", password=root_pw)
+    cursor = conn.cursor()
 
-    # --- Step 3: Create subordinate accounts ---
     print("Creating VergeGrid MySQL accounts (vergeadmin, robustuser, opensimuser)...\n")
 
     vergeadmin_pw = collect_password("vergeadmin (non-root administrator)")
@@ -188,38 +191,44 @@ def change_root_password_and_create_users():
         cursor.execute("GRANT ALL PRIVILEGES ON *.* TO 'vergeadmin'@'localhost';")
         cursor.execute("REVOKE SUPER, GRANT OPTION ON *.* FROM 'vergeadmin'@'localhost';")
 
-        # RobustUser
+        # RobustUser (matching Workbench privileges)
         cursor.execute("DROP USER IF EXISTS 'robustuser'@'localhost';")
         cursor.execute(f"CREATE USER 'robustuser'@'localhost' IDENTIFIED BY '{robust_pw}';")
         cursor.execute("""
-            GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP,
-                   CREATE VIEW, SHOW VIEW, EVENT, TRIGGER,
-                   LOCK TABLES, REFERENCES
-            ON robust_db.* TO 'robustuser'@'localhost';
+            GRANT
+                ALTER, ALTER ROUTINE, CREATE, CREATE ROUTINE, CREATE TABLESPACE,
+                CREATE TEMPORARY TABLES, CREATE USER, CREATE VIEW,
+                DELETE, DROP, EVENT, EXECUTE, FILE, INDEX, INSERT, LOCK TABLES,
+                PROCESS, REFERENCES, RELOAD, REPLICATION CLIENT, REPLICATION SLAVE,
+                SELECT, SHOW DATABASES, SHOW VIEW, SHUTDOWN, TRIGGER, UPDATE
+            ON *.* TO 'robustuser'@'localhost';
         """)
 
-        # OpenSimUser
+        # OpenSimUser (same privileges)
         cursor.execute("DROP USER IF EXISTS 'opensimuser'@'localhost';")
         cursor.execute(f"CREATE USER 'opensimuser'@'localhost' IDENTIFIED BY '{opensim_pw}';")
         cursor.execute("""
-            GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, DROP,
-                   CREATE VIEW, SHOW VIEW, EVENT, TRIGGER,
-                   LOCK TABLES, REFERENCES
-            ON opensim_db.* TO 'opensimuser'@'localhost';
+            GRANT
+                ALTER, ALTER ROUTINE, CREATE, CREATE ROUTINE, CREATE TABLESPACE,
+                CREATE TEMPORARY TABLES, CREATE USER, CREATE VIEW,
+                DELETE, DROP, EVENT, EXECUTE, FILE, INDEX, INSERT, LOCK TABLES,
+                PROCESS, REFERENCES, RELOAD, REPLICATION CLIENT, REPLICATION SLAVE,
+                SELECT, SHOW DATABASES, SHOW VIEW, SHUTDOWN, TRIGGER, UPDATE
+            ON *.* TO 'opensimuser'@'localhost';
         """)
 
         cursor.execute("FLUSH PRIVILEGES;")
         conn.commit()
 
-        print("✅ All VergeGrid MySQL service accounts created with DBManager, DBDesigner, and BackupAdmin privileges.")
-        logging.info("MySQL users vergeadmin, robustuser, and opensimuser created with DBManager/Designer/BackupAdmin privileges.")
+        print("✅ All VergeGrid MySQL service accounts created successfully with full DBManager, DBDesigner, and BackupAdmin privileges.")
     except mysql.connector.Error as err:
-        logging.error(f"MySQL user creation failed: {err}")
-        print(f"[ERROR] Failed to create VergeGrid MySQL users: {err}")
+        print(f"[ERROR] Failed to create users: {err}")
         sys.exit(1)
 
-    # --- Step 4: Store credentials securely ---
+    # --- Step 4: Securely store credentials
+    fernet = get_or_create_key()
     creds_file = os.path.join(base_dir, "creds.conf")
+
     config = ConfigParser()
     config["MySQL_Credentials"] = {
         "root": hashlib.sha256(root_pw.encode()).hexdigest(),
@@ -227,61 +236,25 @@ def change_root_password_and_create_users():
         "robustuser": hashlib.sha256(robust_pw.encode()).hexdigest(),
         "opensimuser": hashlib.sha256(opensim_pw.encode()).hexdigest(),
     }
+    config["Encrypted"] = {
+        "root": encrypt_password(fernet, root_pw),
+        "vergeadmin": encrypt_password(fernet, vergeadmin_pw),
+        "robustuser": encrypt_password(fernet, robust_pw),
+        "opensimuser": encrypt_password(fernet, opensim_pw),
+    }
 
     with open(creds_file, "w", encoding="utf-8") as f:
         config.write(f)
 
-    print(f"\n🔒 Credentials securely hashed and saved to: {creds_file}")
-    logging.info(f"Credentials stored securely in creds.conf at {creds_file}")
-
-    # --- Step 5: Patch GridCommon.ini, Robust.ini, Robust.HG.ini ---
-    print("\n[INFO] Updating OpenSim configuration files...")
-
-    # Determine install_root from command-line arg or stored file
-    install_root = None
-    if len(sys.argv) > 1:
-        install_root = sys.argv[1]
-    else:
-        install_path_file = os.path.join(base_dir, "install_path.txt")
-        if os.path.exists(install_path_file):
-            with open(install_path_file, "r", encoding="utf-8") as f:
-                install_root = f.read().strip()
-
-    if not install_root or not os.path.exists(install_root):
-        print("[WARN] Could not determine valid install_root. Skipping config patch.")
-        logging.warning("install_root argument missing or invalid; skipping INI patch.")
-    else:
-        print(f"[INFO] Using install root: {install_root}")
-        gridcommon_path = os.path.join(install_root, "OpenSim", "bin", "config-include", "GridCommon.ini")
-        robust_path     = os.path.join(install_root, "OpenSim", "bin", "Robust.ini")
-        robust_hg_path  = os.path.join(install_root, "OpenSim", "bin", "Robust.HG.ini")
-
-        replacements = {
-            "gridcommon": ("opensimuser", opensim_pw),
-            "robust":     ("robustuser",  robust_pw),
-            "robust.hg":  ("robustuser",  robust_pw),
-        }
-
-        patched_gc = patch_connection_file(gridcommon_path, replacements) if os.path.exists(gridcommon_path) else False
-        patched_rb = patch_connection_file(robust_path, replacements) if os.path.exists(robust_path) else False
-        patched_hg = patch_connection_file(robust_hg_path, replacements) if os.path.exists(robust_hg_path) else False
-
-        if not patched_gc:
-            print(f"[WARN] Could not locate or update GridCommon.ini at {gridcommon_path}")
-        if not patched_rb:
-            print(f"[WARN] Could not locate or update Robust.ini at {robust_path}")
-        if not patched_hg:
-            print(f"[WARN] Could not locate or update Robust.HG.ini at {robust_hg_path}")
-        else:
-            print("[OK] All detected OpenSim configuration files updated successfully.")
+    print(f"\n🔒 Credentials securely stored in {creds_file}")
+    print("🔑 AES key saved to vault.key — KEEP THIS FILE PRIVATE.\n")
 
     cursor.close()
     conn.close()
-    print("\n✅ MySQL hardening, user provisioning, and OpenSim configuration patch complete.")
-    logging.info("Full MySQL hardening and configuration update (GridCommon.ini + Robust.ini + Robust.HG.ini) complete.")
+    print("✅ MySQL hardening and VergeGrid setup complete.\n")
 
 # --------------------------------------------------------------
-# Script Entry Point
+# Entry Point
 # --------------------------------------------------------------
 if __name__ == "__main__":
     change_root_password_and_create_users()

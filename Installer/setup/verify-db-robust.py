@@ -6,7 +6,7 @@ Purpose:
   - Start Robust.exe (via direct invocation)
   - Verify that the Robust database schema is populated
   - Distinguish between critical and optional tables
-  - Shut Robust.exe down gracefully after verification
+  - Leave Robust.exe running for subsequent setup steps
   - Log results for installer
 """
 
@@ -122,9 +122,9 @@ def verify_robust_db(install_root=None):
 # ------------------------------------------------------------
 def launch_and_verify(install_root):
     """
-    Launch Robust.exe using Robust.HG.ini in a visible console window,
+    Launch Robust.exe using Robust.ini in a visible console window,
     wait for it to initialize, verify database schema creation,
-    then shut it down gracefully after verification.
+    and LEAVE Robust.exe running for the next setup steps.
     """
     install_root = Path(install_root).resolve()
     opensim_root = install_root / "OpenSim" / "bin"
@@ -200,7 +200,7 @@ def launch_and_verify(install_root):
     common.write_log(f"[INFO] Robust.exe launched (PID={robust_process.pid})", "INFO")
 
     # --------------------------------------------------------------------
-    # Verify DB (measure verification time)
+    # Verify DB
     # --------------------------------------------------------------------
     print("\n>>> Checking database status (pass 1)...")
     start_verify = time.time()
@@ -208,25 +208,12 @@ def launch_and_verify(install_root):
     verify_duration = ceil(time.time() - start_verify)
 
     if result == 0:
-        print("✓ Database verified successfully on first pass.")
-        common.write_log("[OK] Database verified on first pass.", "INFO")
-
-        # ----------------------------------------------------------------
-        # Countdown before graceful shutdown (duration = verify time)
-        # ----------------------------------------------------------------
-        print(f"\n>>> Attempting to close Robust.exe gracefully in {verify_duration}s...")
-        for remaining in range(verify_duration, 0, -1):
-            sys.stdout.write(f"\r⏳ Preparing to shut down Robust.exe... {remaining:2d}s")
-            sys.stdout.flush()
-            time.sleep(1)
-        sys.stdout.write("\r🔧 Initiating shutdown now...                               \n")
-        sys.stdout.flush()
+        print("✓ Database verified successfully.")
+        common.write_log("[OK] Database verified successfully.", "INFO")
     else:
-        # Second pass
+        print("[WARN] Database incomplete — attempting a second verification after delay.")
         total_wait_2 = 30
-        print("⚠️  Database not yet complete. Waiting 30 more seconds...\n")
-        print("DO NOT CLOSE THE CONSOLE OR INTERACT WITH IT.")
-        print("JUST SIT BACK AND CHILL FOR A BIT.\n")
+        print("\n[INFO] Waiting another 30 seconds for delayed initialization...")
         for remaining in range(total_wait_2, 0, -1):
             sys.stdout.write(f"\r⏳ Retrying verification in {remaining:2d}s...")
             sys.stdout.flush()
@@ -238,35 +225,17 @@ def launch_and_verify(install_root):
             time.sleep(1)
         sys.stdout.write("\r🔁 Retrying verification now...                             \n")
         sys.stdout.flush()
-        print(">>> Checking database status (pass 2)...")
         result = verify_robust_db(install_root)
-        if result != 0:
-            print("[FATAL] Database still incomplete after second check.")
-            common.write_log("[FATAL] Database verification failed after second check.", "ERROR")
-            print("⚠️  Leaving Robust.exe running for manual troubleshooting.")
-            return 2
 
     # --------------------------------------------------------------------
-    # Graceful stop (with log)
+    # LEAVE Robust RUNNING
     # --------------------------------------------------------------------
-    print("\n>>> Attempting to close Robust.exe gracefully...")
-    try:
-        robust_process.send_signal(signal.CTRL_BREAK_EVENT)
-        time.sleep(10)
+    print("\n✅ Robust.exe verified and will remain running for the next setup stages.")
+    print("   You may now safely continue with God user creation, estate setup,")
+    print("   and region initialization — Robust is fully online.\n")
 
-        if robust_process.poll() is None:
-            robust_process.terminate()
-            time.sleep(5)
-
-        if robust_process.poll() is None:
-            robust_process.kill()
-
-        print("✓ Robust.exe stopped cleanly after schema verification.\n")
-        common.write_log("[OK] Robust.exe stopped cleanly after schema verification.", "INFO")
-
-    except Exception as e:
-        print(f"[WARN] Graceful shutdown failed: {e}")
-        common.write_log(f"[WARN] Graceful shutdown failed: {e}", "WARN")
+    common.write_log("[OK] Robust.exe left running for next setup stages.", "INFO")
+    print(f"[INFO] Robust.exe is still running under PID {robust_process.pid}.\n")
 
     return 0
 

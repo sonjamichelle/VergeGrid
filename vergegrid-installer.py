@@ -168,9 +168,45 @@ def main():
             installed.append(("MySQL", install_root))
         else:
             sys.exit(1)
-            
+
     # ============================================================
-    # STEP 2: OpenSim
+    # STEP 2: Apache (Fetch + Extract Only)
+    # ============================================================
+    if confirm("Fetch Apache Web Server?"):
+        if run_component("fetch-apache.py", install_root, title="Apache Fetcher"):
+            installed.append(("Apache", install_root))
+        else:
+            print("[WARN] Apache install skipped or failed.")
+
+    # ============================================================
+    # STEP 3: PHP (Fetch + Extract Only)
+    # ============================================================
+    if confirm("Fetch PHP Interpreter?"):
+        if run_component("fetch-php.py", install_root, title="PHP Fetcher"):
+            installed.append(("PHP", install_root))
+        else:
+            print("[WARN] PHP install skipped or failed.")
+
+    # ============================================================
+    # STEP 4: Apache/PHP Integration
+    # ============================================================
+    if confirm("Initialize Apache/PHP Integration?"):
+        if run_component("init-apache-php.py", install_root, title="Apache/PHP Integration"):
+            installed.append(("Apache-PHP Stack", install_root))
+        else:
+            print("[WARN] Apache/PHP integration skipped or failed.")
+
+    # ============================================================
+    # STEP 5: Let’s Encrypt (Windows ACME)
+    # ============================================================
+    if confirm("Install Let's Encrypt (Windows ACME) Support?"):
+        if run_component("fetch-letsencrypt.py", install_root, title="Let's Encrypt Installer"):
+            installed.append(("LetsEncrypt", install_root))
+        else:
+            print("[WARN] Let's Encrypt install skipped or failed.")
+
+    # ============================================================
+    # STEP 6: OpenSim (Final Step)
     # ============================================================
     if confirm("Install OpenSim?"):
         mysql_user = input("MySQL Username [root] JUST PRESS ENTER!: ").strip() or "root"
@@ -186,17 +222,13 @@ def main():
                 common.write_log("[FATAL] OpenSim initialization failed.", "ERROR")
                 sys.exit(1)
 
-            # ------------------------------------------------------------
-            # SAFETY CHECK: Make sure config files are actually there
-            # ------------------------------------------------------------
-            import time
-
+            # SAFETY CHECK: Verify config files exist
             opensim_root = Path(install_root) / "OpenSim" / "bin"
             gridcommon = opensim_root / "config-include" / "GridCommon.ini"
             robust_ini = opensim_root / "Robust.ini"
 
             print("\n[INFO] Verifying patched configuration files before Robust registration...")
-            time.sleep(5)  # let filesystem flush
+            time.sleep(5)
             if not gridcommon.exists() or gridcommon.stat().st_size < 200:
                 print("[FATAL] GridCommon.ini missing or invalid. Cannot continue.")
                 sys.exit(3)
@@ -205,9 +237,7 @@ def main():
                 sys.exit(3)
             print("✓ Configuration validation passed. Proceeding to Robust setup.\n")
 
-            # ------------------------------------------------------------
-            # STEP 2.1: Register Robust Service (manual start only)
-            # ------------------------------------------------------------
+            # STEP 6.1: Register Robust Service (manual start only)
             if run_component("init-opensim-services.py", install_root, title="OpenSim Robust Service Registration"):
                 common.write_log("[OK] Robust service registered successfully (manual start).", "INFO")
                 installed.append(("Robust Service", install_root))
@@ -215,49 +245,10 @@ def main():
                 print("[FATAL] Robust service registration failed. Aborting installation.")
                 sys.exit(1)
 
-            # ------------------------------------------------------------
-            # SUCCESS – continue to next installer stage
-            # ------------------------------------------------------------
-            print("\n[OK] OpenSim + Robust registration completed. Proceeding to Apache setup...\n")
+            print("\n[OK] OpenSim + Robust registration completed successfully.\n")
 
         else:
             sys.exit(1)
-
-    # ============================================================
-    # STEP 3: Apache (Fetch + Extract Only)
-    # ============================================================
-    if confirm("Fetch Apache Web Server?"):
-        if run_component("fetch-apache.py", install_root, title="Apache Fetcher"):
-            installed.append(("Apache", install_root))
-        else:
-            print("[WARN] Apache install skipped or failed.")
-
-    # ============================================================
-    # STEP 4: PHP (Fetch + Extract Only)
-    # ============================================================
-    if confirm("Fetch PHP Interpreter?"):
-        if run_component("fetch-php.py", install_root, title="PHP Fetcher"):
-            installed.append(("PHP", install_root))
-        else:
-            print("[WARN] PHP install skipped or failed.")
-
-    # ============================================================
-    # STEP 5: Apache/PHP Integration
-    # ============================================================
-    if confirm("Initialize Apache/PHP Integration?"):
-        if run_component("init-apache-php.py", install_root, title="Apache/PHP Integration"):
-            installed.append(("Apache-PHP Stack", install_root))
-        else:
-            print("[WARN] Apache/PHP integration skipped or failed.")
-
-    # ============================================================
-    # STEP 6: Let’s Encrypt (Windows ACME)
-    # ============================================================
-    if confirm("Install Let's Encrypt (Windows ACME) Support?"):
-        if run_component("fetch-letsencrypt.py", install_root, title="Let's Encrypt Installer"):
-            installed.append(("LetsEncrypt", install_root))
-        else:
-            print("[WARN] Let's Encrypt install skipped or failed.")
 
     # ============================================================
     # FINAL SUMMARY

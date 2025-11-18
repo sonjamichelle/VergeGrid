@@ -12,6 +12,11 @@ Purpose:
 # --- VergeGrid Path Fix ---
 import os
 import sys
+import subprocess
+import time
+import ctypes
+import psutil
+from pathlib import Path
 
 # Find VergeGrid root (one level up from /setup/)
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -19,26 +24,45 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 # --- End Fix ---
 
-import subprocess
-import time
-import ctypes
-from pathlib import Path  # ✅ FIXED: Global import to avoid UnboundLocalError
-
 try:
     from setup import common
 except ModuleNotFoundError:
     import common
 
+
 # --------------------------------------------------------------------
-# Auto-install psutil if missing
+# Kill Process Tree
 # --------------------------------------------------------------------
-try:
-    import psutil
-except ImportError:
-    print("[INFO] Missing dependency: psutil. Installing automatically...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
-    subprocess.run([sys.executable, "-m", "pip", "install", "psutil"], check=True)
-    import psutil
+def kill_process_tree(pid=None, include_parent=True):
+    """Kill this process and all its children (for full cancel)."""
+    if pid is None:
+        pid = os.getpid()
+
+    try:
+        parent = psutil.Process(pid)
+        children = parent.children(recursive=True)
+        for p in children:
+            try:
+                p.terminate()
+            except psutil.NoSuchProcess:
+                pass
+
+        gone, alive = psutil.wait_procs(children, timeout=3)
+        for p in alive:
+            try:
+                p.kill()
+            except psutil.NoSuchProcess:
+                pass
+
+        if include_parent:
+            parent.terminate()
+            try:
+                parent.wait(2)
+            except psutil.TimeoutExpired:
+                parent.kill()
+        print("[KILL] Terminated process tree cleanly.")
+    except Exception as e:
+        print(f"[WARN] Process tree termination failed: {e}")
 
 
 # --------------------------------------------------------------------
@@ -59,7 +83,6 @@ def confirm(prompt, default_yes=True):
 def select_install_drive():
     print("\nVergeGrid Installer - Drive Selection\n")
 
-    # List all detected drives
     drives = [d.device for d in psutil.disk_partitions(all=False)]
     for d in drives:
         try:
@@ -68,36 +91,27 @@ def select_install_drive():
         except PermissionError:
             pass
 
-    # Ask for drive letter
     choice = input("Enter drive letter for installation (default C): ").strip().upper()
     if not choice:
         choice = "C"
     if not choice.endswith(":"):
         choice += ":"
 
-    # Ask for installation folder name
     folder_name = input("Enter installation folder name (default VergeGrid): ").strip()
     if not folder_name:
         folder_name = "VergeGrid"
 
-    # Construct final path
     path = os.path.join(choice + "\\", folder_name)
     print(f"\nInstallation path set to: {path}")
 
-    # Confirm and create directories
     if not confirm("Create and use this path?"):
-        print("[INFO] Installation cancelled by user.")
+        print("[CANCELLED] Installation aborted by user.")
+        kill_process_tree()
         sys.exit(0)
 
-    # Create main folder + subdirectories
-    try:
-        os.makedirs(os.path.join(path, "Downloads"), exist_ok=True)
-        os.makedirs(os.path.join(path, "Logs"), exist_ok=True)
-        print(f"[OK] Created installation directories under {path}")
-    except Exception as e:
-        print(f"[FATAL] Failed to create directories: {e}")
-        sys.exit(1)
-
+    os.makedirs(os.path.join(path, "Downloads"), exist_ok=True)
+    os.makedirs(os.path.join(path, "Logs"), exist_ok=True)
+    print(f"[OK] Created installation directories under {path}")
     return path
 
 
@@ -122,12 +136,28 @@ def ensure_admin():
 # --------------------------------------------------------------------
 # Environment Manager Integration
 # --------------------------------------------------------------------
+def find_envmgr():
+    """Locate vergegrid-cleanup.py reliably in multiple locations."""
+    search_paths = [
+        Path(__file__).parent / "vergegrid-cleanup.py",
+        Path(__file__).parent / "setup" / "vergegrid-cleanup.py",
+        Path(__file__).parent.parent / "setup" / "vergegrid-cleanup.py",
+        Path(__file__).parent.parent / "vergegrid-cleanup.py"
+    ]
+    for p in search_paths:
+        if p.exists():
+            return p.resolve()
+    return None
+
+
 def run_envmgr():
-    """Runs vergegrid-cleanup.py safely and stops the installer if cancelled."""
-    envmgr_path = Path("setup") / "vergegrid-cleanup.py"
-    if not envmgr_path.exists():
-        print("[WARN] Environment Manager not found. Skipping cleanup check.")
-        return
+    """Run the Environment Manager, handle cancellation instantly."""
+    envmgr_path = find_envmgr()
+    if not envmgr_path:
+        print("[FATAL] Environment Manager (vergegrid-cleanup.py) not found.")
+        print("Cannot safely continue installation.")
+        kill_process_tree()
+        sys.exit(1)
 
     print("\n>>> Checking for existing VergeGrid installation...")
     result = subprocess.run(
@@ -136,18 +166,18 @@ def run_envmgr():
         text=True
     )
 
-    stdout = result.stdout
+    stdout = result.stdout or ""
     code = result.returncode
 
     if "::VERGEGRID_CANCELLED::" in stdout or code == 111:
         print("\n[INFO] Environment Manager reported user cancellation.")
-        print("[EXIT] Installer stopped per user request.\n")
+        print("[EXIT] Stopping entire installation process per user request.\n")
+        kill_process_tree()
         sys.exit(0)
     elif code != 0:
         print(f"\n[WARN] Environment Manager exited with code {code}.")
-        print("Output:")
-        print(stdout)
-        print("[WARN] Continuing installation, but review the cleanup log.")
+        print("Output:\n" + stdout)
+        print("[WARN] Continuing installation, but check cleanup log.")
     else:
         print("[OK] Environment Manager completed successfully.\n")
 
@@ -156,39 +186,45 @@ def run_envmgr():
 # Component Runner
 # --------------------------------------------------------------------
 def run_component(script_name, *args, title=None):
-    """
-    Calls a modular component (fetcher) script via subprocess.
-    Logs output, exit code, and checks for failure.
-    """
+    """Run a VergeGrid setup component via subprocess."""
     if title:
         print(f"\n>>> Running {title} ...")
         print("=" * 70)
-    script_path = Path("setup") / script_name
-    if not script_path.exists():
-        print(f"[ERROR] Missing component: {script_path}")
-        common.write_log(f"[ERROR] Missing component: {script_path}")
-        return False
+
+    possible_paths = [
+        Path("setup") / script_name,
+        Path(__file__).parent / "setup" / script_name,
+        Path(__file__).parent / script_name,
+    ]
+    script_path = next((p for p in possible_paths if p.exists()), None)
+
+    if not script_path:
+        print(f"[FATAL] Missing component: {script_name}")
+        common.write_log(f"[FATAL] Missing component: {script_name}")
+        kill_process_tree()
+        sys.exit(1)
 
     cmd = [sys.executable, str(script_path)] + list(args)
     result = subprocess.run(cmd, capture_output=True, text=True)
 
-    exit_code = result.returncode
-    status = "SUCCESS" if exit_code == 0 else "FAIL"
+    stdout = result.stdout or ""
+    code = result.returncode
+    status = "SUCCESS" if code == 0 else "FAIL"
 
-    # Log and print results
-    print(result.stdout)
-    print(f"\n[{status}] {title or script_name} exited with code {exit_code}\n")
-    common.write_log(f"[{status}] {title or script_name} exited with code {exit_code}")
+    print(stdout)
+    print(f"\n[{status}] {title or script_name} exited with code {code}\n")
+    common.write_log(f"[{status}] {title or script_name} exited with code {code}")
 
-    # Detect user cancellation from component scripts
-    if "::VERGEGRID_CANCELLED::" in result.stdout or exit_code == 111:
+    if "::VERGEGRID_CANCELLED::" in stdout or code == 111:
         print("[INFO] User cancelled operation — halting installer.")
+        kill_process_tree()
         sys.exit(0)
 
-    if exit_code != 0:
-        print(f"[FAIL] {title or script_name} failed (exit code {exit_code}).")
+    if code != 0:
+        print(f"[FAIL] {title or script_name} failed (exit code {code}).")
         print("Check VergeGrid logs for details.")
-        return False
+        kill_process_tree()
+        sys.exit(code)
 
     print(f"[OK] {title or script_name} completed successfully.\n")
     return True
@@ -212,7 +248,6 @@ def main():
     os.makedirs(downloads_root, exist_ok=True)
     os.makedirs(logs_root, exist_ok=True)
 
-    # Setup unified log for all components
     log_file = logs_root / "vergegrid-install.log"
     common.set_log_file(str(log_file))
     common.write_log("=== VergeGrid Modular Installer Started ===")

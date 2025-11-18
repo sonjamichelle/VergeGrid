@@ -5,6 +5,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+
+## [v0.9.7] – 2025-11-18 06:49 UTC
+
+### 🛠️ Changed
+- Installer now hard-fails if Environment Manager is missing instead of skipping
+- Added full process tree kill on user cancellation or failure
+- Removed spurious `[WARN] Environment Manager not found` message
+
+### 🧱 Internal Improvements
+- Improved environment manager path detection
+- Unified cancel/abort behavior across all VergeGrid installer phases
+
 ## [v0.9.5] – 2025-11-18 06:08 UTC
 
 ### 🛠️ Changed

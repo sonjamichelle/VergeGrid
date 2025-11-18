@@ -253,103 +253,111 @@ def main():
     installed = []
 
     # ============================================================
-    # STEP 1–5: MySQL → Let's Encrypt
+    # STEP 1–5: MySQL → Let's Encrypt (AUTO MODE)
     # ============================================================
-    if confirm("Install MySQL?"):
-        if run_component("fetch-mysql.py", install_root, title="MySQL Installer"):
-            installed.append(("MySQL", install_root))
-        else:
+    print("\n[INFO] Installing MySQL automatically...\n")
+    if run_component("fetch-mysql.py", install_root, title="MySQL Installer"):
+        installed.append(("MySQL", install_root))
+    else:
+        sys.exit(1)
+
+    print("\n[INFO] Fetching Apache Web Server automatically...\n")
+    if run_component("fetch-apache.py", install_root, title="Apache Fetcher"):
+        installed.append(("Apache", install_root))
+    else:
+        print("[WARN] Apache install skipped or failed.")
+
+    print("\n[INFO] Fetching PHP Interpreter automatically...\n")
+    if run_component("fetch-php.py", install_root, title="PHP Fetcher"):
+        installed.append(("PHP", install_root))
+    else:
+        print("[WARN] PHP install skipped or failed.")
+
+    print("\n[INFO] Initializing Apache/PHP integration automatically...\n")
+    if run_component("init-apache-php.py", install_root, title="Apache/PHP Integration"):
+        installed.append(("Apache-PHP Stack", install_root))
+    else:
+        print("[WARN] Apache/PHP integration skipped or failed.")
+
+    print("\n[INFO] Installing Let's Encrypt (Windows ACME) support automatically...\n")
+    if run_component("fetch-letsencrypt.py", install_root, title="Let's Encrypt Installer"):
+        installed.append(("LetsEncrypt", install_root))
+    else:
+        print("[WARN] Let's Encrypt install skipped or failed.")
+
+    # ============================================================
+    # STEP 6: OpenSim (AUTO MODE)
+    # ============================================================
+    print("\n[INFO] Installing OpenSim automatically...\n")
+    mysql_user = "root"
+    mysql_pass = ""
+
+    if run_component("fetch-opensim.py", install_root, mysql_user, mysql_pass, title="OpenSim Fetcher"):
+        installed.append(("OpenSim", install_root))
+
+        if not ensure_opensim_ini(install_root):
+            print("[FATAL] Failed to verify or create OpenSim.ini and include files. Aborting installation.")
             sys.exit(1)
 
-    if confirm("Fetch Apache Web Server?"):
-        if run_component("fetch-apache.py", install_root, title="Apache Fetcher"):
-            installed.append(("Apache", install_root))
-
-    if confirm("Fetch PHP Interpreter?"):
-        if run_component("fetch-php.py", install_root, title="PHP Fetcher"):
-            installed.append(("PHP", install_root))
-
-    if confirm("Initialize Apache/PHP Integration?"):
-        if run_component("init-apache-php.py", install_root, title="Apache/PHP Integration"):
-            installed.append(("Apache-PHP Stack", install_root))
-
-    if confirm("Install Let's Encrypt (Windows ACME) Support?"):
-        if run_component("fetch-letsencrypt.py", install_root, title="Let's Encrypt Installer"):
-            installed.append(("LetsEncrypt", install_root))
-
-    # ============================================================
-    # STEP 6: OpenSim
-    # ============================================================
-    if confirm("Install OpenSim?"):
-        mysql_user = "root"
-        mysql_pass = ""
-
-        if run_component("fetch-opensim.py", install_root, mysql_user, mysql_pass, title="OpenSim Fetcher"):
-            installed.append(("OpenSim", install_root))
-
-            if not ensure_opensim_ini(install_root):
-                print("[FATAL] Failed to verify or create OpenSim.ini and include files. Aborting installation.")
-                sys.exit(1)
-
-            if run_component("init-opensim.py", install_root, mysql_user, mysql_pass, title="OpenSim Initializer"):
-                common.write_log("[OK] OpenSim base configuration completed successfully.", "INFO")
-            else:
-                common.write_log("[FATAL] OpenSim initialization failed.", "ERROR")
-                sys.exit(1)
-
-            if not run_component("verify-db-robust.py", install_root, title="Robust Database Verifier"):
-                print("[FATAL] Robust verification failed — manual inspection required.")
-                common.write_log("[FATAL] Robust verification failed.", "ERROR")
-                sys.exit(1)
-            else:
-                installed.append(("Robust Verification", install_root))
-                print("[OK] Robust verification completed successfully.\n")
-
-    # ============================================================
-    # STEP 7: Secure MySQL Root User
-    # ============================================================
-    if confirm("Secure MySQL root user now?"):
-        print("\n[INFO] Initiating MySQL root password security setup...\n")
-        if run_component("secure_mysql_root.py", install_root, title="MySQL Root Security Setup"):
-            installed.append(("MySQL Security", install_root))
-            common.write_log("[OK] MySQL root password secured successfully.", "INFO")
+        if run_component("init-opensim.py", install_root, mysql_user, mysql_pass, title="OpenSim Initializer"):
+            common.write_log("[OK] OpenSim base configuration completed successfully.", "INFO")
         else:
-            print("[FATAL] MySQL security setup failed. Aborting installation.")
-            common.write_log("[FATAL] MySQL security setup failed.", "ERROR")
+            common.write_log("[FATAL] OpenSim initialization failed.", "ERROR")
             sys.exit(1)
 
-    # ============================================================
-    # STEP 8: Create VergeGrid God User
-    # ============================================================
-    if confirm("Create initial God (grid admin) user now?"):
-        print("\n[INFO] Launching God user database provisioning utility...\n")
-        if run_component("create_god_user_db.py", install_root, title="VergeGrid God User Creator"):
-            installed.append(("God User", install_root))
-            common.write_log("[OK] VergeGrid God user created successfully.", "INFO")
-        else:
-            print("[FATAL] God user creation failed. Aborting installation.")
-            common.write_log("[FATAL] God user creation failed.", "ERROR")
+        if not run_component("verify-db-robust.py", install_root, title="Robust Database Verifier"):
+            print("[FATAL] Robust verification failed — manual inspection required.")
+            common.write_log("[FATAL] Robust verification failed.", "ERROR")
             sys.exit(1)
-
-    # ============================================================
-    # STEP 9: Initialize Default Landing Estate & First Region
-    # ============================================================
-    if confirm("Initialize default Landing estate and first region now?"):
-        print("\n[INFO] Launching VergeGrid Region Creator (interactive mode)...\n")
-
-        region_script = os.path.join(install_root, "Tools", "create-region.py")
-
-        cmd = [sys.executable, region_script, "new"]
-
-        result = subprocess.run(cmd, cwd=install_root, text=True)
-
-        if result.returncode == 0:
-            print("[OK] Region initialization completed successfully.\n")
-            common.write_log("[OK] Region initialization completed successfully.", "INFO")
         else:
-            print("[FATAL] Region creation failed during Landing Estate setup.")
-            common.write_log("[FATAL] Region creation failed during Landing Estate setup.", "ERROR")
-            sys.exit(1)
+            installed.append(("Robust Verification", install_root))
+            print("[OK] Robust verification completed successfully.\n")
+    else:
+        sys.exit(1)
+
+    # ============================================================
+    # STEP 7: Secure MySQL Root User (AUTO MODE)
+    # ============================================================
+    print("\n[INFO] Securing MySQL root user automatically...\n")
+    if run_component("secure_mysql_root.py", install_root, title="MySQL Root Security Setup"):
+        installed.append(("MySQL Security", install_root))
+        common.write_log("[OK] MySQL root password secured successfully.", "INFO")
+    else:
+        print("[FATAL] MySQL security setup failed. Aborting installation.")
+        common.write_log("[FATAL] MySQL security setup failed.", "ERROR")
+        sys.exit(1)
+
+    # ============================================================
+    # STEP 8: Create VergeGrid God User (AUTO MODE)
+    # ============================================================
+    print("\n[INFO] Creating VergeGrid God user automatically...\n")
+    if run_component("create_god_user_db.py", install_root, title="VergeGrid God User Creator"):
+        installed.append(("God User", install_root))
+        common.write_log("[OK] VergeGrid God user created successfully.", "INFO")
+    else:
+        print("[FATAL] God user creation failed. Aborting installation.")
+        common.write_log("[FATAL] God user creation failed.", "ERROR")
+        sys.exit(1)
+
+    # ============================================================
+    # STEP 9: Initialize Default Landing Estate & First Region (AUTO MODE)
+    # ============================================================
+    print("\n[INFO] Launching VergeGrid Region Creator (Automated create-region.py)...\n")
+
+    region_script = os.path.join(setup_dir, "create-region.py")
+
+    cmd = [sys.executable, region_script]
+
+    result = subprocess.run(cmd, cwd=setup_dir, text=True)
+    if result.returncode == 0:
+        print("[OK] Region initialization completed successfully.\n")
+        common.write_log("[OK] Region initialization completed successfully.", "INFO")
+    else:
+        print("[FATAL] Region creation failed during Landing Estate setup.")
+        common.write_log("[FATAL] Region creation failed during Landing Estate setup.", "ERROR")
+        sys.exit(1)
+
+
 
     # ============================================================
     # FINAL SUMMARY

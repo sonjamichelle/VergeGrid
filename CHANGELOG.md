@@ -4,14 +4,17 @@ All notable changes are auto-generated from Git commits.
 
 ---
 
-## [v0.0.2] [2025-11-18] VergeGrid Installer — Build 2025.11.18.1310a
+## [v0.0.2] [2025-11-18] VergeGrid Installer — Build 2025.11.18.1425a
 
 ### Added
 - feat(installer): finalize modular installer and core OpenSim initialization  (298348e)
 - feat(changelog): add full historical Git changelog generator with automatic build summaries  (a730261)
+- feat(installer): integrate create-region.py for VergeGrid region initialization  (14ec6d2)
 
 ### Improved
 - refactor(installer): fully automate VergeGrid installation workflow (zero confirmations)  (b348e92)
+- Update CHANGELOG.md  (45378e0)
+- refactor(installer): use interactive region creation via create-region.py  (9f2d8bb)
 
 ### Other
 - secure clean out  (52eb16a)
@@ -20,7 +23,7 @@ All notable changes are auto-generated from Git commits.
 
 ---
 
-## [v0.0.1] [2025-11-18] VergeGrid Installer — Build 2025.11.18.1310a
+## [v0.0.1] [2025-11-18] VergeGrid Installer — Build 2025.11.18.1425a
 
 ### Added
 - added changelog and bumper  (d8136cf)

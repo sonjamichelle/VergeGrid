@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
-VergeGrid Region Manager (create-region.py)
-Cross-platform tool for managing OpenSim regions under VergeGrid.
-Supports both interactive and command-line usage.
+VergeGrid Region Bootstrap (create-region.py)
+Automatically creates the default Landing region and estate.
+Assigns the estate owner as the God user from the database.
+Used by the VergeGrid installer during first-time setup.
 """
 
-import argparse
 import configparser
 import os
 import shutil
-import subprocess
 import sys
 import uuid
+import mysql.connector
+from cryptography.fernet import Fernet
+from configparser import ConfigParser
 from pathlib import Path
 
 # --- Constants ---
@@ -22,8 +24,46 @@ ARCHIVE_DIR = REGIONS_DIR / "Archive"
 TEMPLATES_DIR = REGIONS_DIR / "Templates"
 REGIONS_INI = REGIONS_DIR / "Regions.ini"
 
-# --- Helpers ---
+# Default region parameters
+DEFAULT_REGION_NAME = "Verge Landing"
+DEFAULT_ESTATE_NAME = "Landings"
+DEFAULT_TEMPLATE = "256_Default.ini"
+DEFAULT_LOCATION = "9300,9300"
+DEFAULT_PORT = "8005"
+
+# --- Credential Loader ---
+def load_encrypted_credentials(user_key="robustuser", debug=False):
+    """Decrypt VergeGrid MySQL credentials from creds.conf using vault.key."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    creds_path = os.path.join(base_dir, "creds.conf")
+    vault_path = os.path.join(base_dir, "vault.key")
+
+    if not os.path.exists(creds_path) or not os.path.exists(vault_path):
+        print("[FATAL] Missing creds.conf or vault.key. Run secure_mysql_root.py first.")
+        sys.exit(1)
+
+    # Load AES key
+    with open(vault_path, "rb") as f:
+        key = f.read()
+    fernet = Fernet(key)
+
+    # Read encrypted credentials
+    config = ConfigParser()
+    config.read(creds_path, encoding="utf-8")
+
+    try:
+        encrypted_pw = config["Encrypted"][user_key]
+        decrypted_pw = fernet.decrypt(encrypted_pw.encode()).decode()
+        if debug:
+            print(f"[DEBUG] Successfully decrypted password for '{user_key}'.")
+        return decrypted_pw
+    except Exception as e:
+        print(f"[ERROR] Unable to decrypt {user_key} password: {e}")
+        sys.exit(1)
+
+# --- Helper functions ---
 def ensure_dirs():
+    """Ensure region directory structure exists."""
     for d in [REGIONS_DIR, ACTIVE_DIR, ARCHIVE_DIR, TEMPLATES_DIR]:
         d.mkdir(parents=True, exist_ok=True)
 
@@ -31,8 +71,8 @@ def ensure_dirs():
         with open(REGIONS_INI, "w", encoding="utf-8") as f:
             f.write("[Regions]\n")
 
-    # Default template
-    default_template = TEMPLATES_DIR / "256_Default.ini"
+    # Ensure default template exists
+    default_template = TEMPLATES_DIR / DEFAULT_TEMPLATE
     if not default_template.exists():
         default_template.write_text(
             """[Region]
@@ -47,10 +87,8 @@ ExternalHostName = SYSTEMIP
             encoding="utf-8",
         )
 
-
 def generate_uuid():
     return str(uuid.uuid4())
-
 
 def read_regions():
     cfg = configparser.ConfigParser()
@@ -59,154 +97,94 @@ def read_regions():
         cfg["Regions"] = {}
     return cfg
 
-
 def write_regions(cfg):
     with open(REGIONS_INI, "w", encoding="utf-8") as f:
         cfg.write(f)
 
+def get_god_user(debug=False):
+    """Fetch the first God user (UserLevel >= 250) from the robust DB using decrypted creds."""
+    mysql_user = "robustuser"
+    mysql_pw = load_encrypted_credentials("robustuser", debug=debug)
+    mysql_db = "robust"
 
-def create_region_interactive(args):
-    print("\n=== VergeGrid Region Creation Wizard ===")
-    name = args.name or input("Region name: ").strip()
-    template = args.template or input("Template (default: 256_Default.ini): ").strip() or "256_Default.ini"
-    estate = args.estate or input("Estate name (optional): ").strip() or "DefaultEstate"
-    location = args.location or input("Grid location (e.g. 1000,1000): ").strip() or "1000,1000"
-    port = args.port or input("Port (default 9000): ").strip() or "9000"
+    try:
+        conn = mysql.connector.connect(
+            host="localhost",
+            user=mysql_user,
+            password=mysql_pw,
+            database=mysql_db
+        )
+        cursor = conn.cursor()
+        cursor.execute("SELECT PrincipalID, FirstName, LastName FROM useraccounts WHERE UserLevel >= 250 LIMIT 1;")
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
 
-    create_region(name, template, estate, location, port)
+        if row:
+            pid, first, last = row
+            return pid, f"{first} {last}"
+        else:
+            return None, None
+    except Exception as e:
+        print(f"[WARN] Could not fetch God user: {e}")
+        return None, None
 
-
-def create_region(name, template, estate, location, port):
+def create_default_region():
+    """Automatically create Verge Landing region and estate."""
     ensure_dirs()
-    template_path = TEMPLATES_DIR / template
+
+    god_id, god_name = get_god_user()
+    if not god_id:
+        print("[WARN] No God user found. Owner will be left blank.")
+
+    template_path = TEMPLATES_DIR / DEFAULT_TEMPLATE
     if not template_path.exists():
-        print(f"Template not found: {template_path}")
+        print(f"[FATAL] Missing template file: {template_path}")
         sys.exit(1)
 
-    region_path = ACTIVE_DIR / f"{name}.ini"
+    region_path = ACTIVE_DIR / f"{DEFAULT_REGION_NAME}.ini"
     shutil.copy(template_path, region_path)
 
     content = region_path.read_text(encoding="utf-8")
-    content = content.replace("DefaultRegion", name)
+    content = content.replace("DefaultRegion", DEFAULT_REGION_NAME)
     content = content.replace("AUTO", generate_uuid())
-    content = content.replace("1000,1000", location)
-    content = content.replace("9000", port)
+    content = content.replace("1000,1000", DEFAULT_LOCATION)
+    content = content.replace("9000", DEFAULT_PORT)
     region_path.write_text(content, encoding="utf-8")
 
     cfg = read_regions()
-    cfg["Regions"][name] = f"Active/{name}.ini"
+    cfg["Regions"][DEFAULT_REGION_NAME] = f"Active/{DEFAULT_REGION_NAME}.ini"
     write_regions(cfg)
 
-    print(f"\n✅ Region '{name}' created successfully!")
-    print(f"   Template: {template}")
-    print(f"   Estate: {estate}")
-    print(f"   Location: {location}")
-    print(f"   Port: {port}\n")
+    # Estate override file (for DreamGrid-style estates)
+    estate_ini = REGIONS_DIR / "Landings" / f"{DEFAULT_ESTATE_NAME}.ini"
+    estate_ini.parent.mkdir(parents=True, exist_ok=True)
+    estate_ini.write_text(
+        f"""[EstateSettings]
+EstateName = {DEFAULT_ESTATE_NAME}
+EstateOwner = {god_id or '00000000-0000-0000-0000-000000000000'}
+EstateOwnerName = {god_name or 'Unknown User'}
+""",
+        encoding="utf-8",
+    )
 
+    print(f"[OK] Created region configuration: {region_path}")
+    print(f"     Region UUID: {generate_uuid()}")
+    print(f"     Port: {DEFAULT_PORT}")
+    print(f"     Location: {DEFAULT_LOCATION}")
+    print(f"[OK] Created estate override: {estate_ini}")
 
-def list_regions():
-    ensure_dirs()
-    cfg = read_regions()
-    print("\n=== Active Regions ===")
-    for name, path in cfg["Regions"].items():
-        print(f" - {name}: {path}")
+    if god_id:
+        print(f"[OK] Assigned estate owner: {god_name} ({god_id})")
 
-    archived = list(ARCHIVE_DIR.glob("*.ini"))
-    if archived:
-        print("\n=== Archived Regions ===")
-        for f in archived:
-            print(f" - {f.stem}")
+    print("\n✅ Landing estate fully initialized!")
+    print("   To start your simulator, run:")
+    print(f"   OpenSim.exe -inifile=Regions/Landings/{DEFAULT_ESTATE_NAME}.ini\n")
 
-
-def activate_region(name):
-    src = ARCHIVE_DIR / f"{name}.ini"
-    dst = ACTIVE_DIR / f"{name}.ini"
-    if not src.exists():
-        print(f"Region {name} not found in archive.")
-        return
-    shutil.move(src, dst)
-    cfg = read_regions()
-    cfg["Regions"][name] = f"Active/{name}.ini"
-    write_regions(cfg)
-    print(f"✅ Region '{name}' activated.")
-
-
-def deactivate_region(name):
-    src = ACTIVE_DIR / f"{name}.ini"
-    dst = ARCHIVE_DIR / f"{name}.ini"
-    if not src.exists():
-        print(f"Region {name} not found in active list.")
-        return
-    shutil.move(src, dst)
-    cfg = read_regions()
-    if name in cfg["Regions"]:
-        del cfg["Regions"][name]
-    write_regions(cfg)
-    print(f"⚙️ Region '{name}' deactivated and archived.")
-
-
-def launch_regions():
-    ensure_dirs()
-    cfg = read_regions()
-    if not cfg["Regions"]:
-        print("No regions to launch.")
-        return
-
-    print("\n🚀 Launching all active regions...\n")
-    for name, relpath in cfg["Regions"].items():
-        region_path = REGIONS_DIR / relpath
-        if not region_path.exists():
-            print(f"⚠️ Missing file for region {name}: {region_path}")
-            continue
-
-        exe = BASE_DIR / "bin" / "OpenSim.exe"
-        if not exe.exists():
-            print("⚠️ OpenSim.exe not found in bin/ — skipping launch.")
-            return
-
-        if os.name == "nt":
-            subprocess.Popen([str(exe), f"-inidirectory={region_path.parent}"], cwd=exe.parent)
-        else:
-            subprocess.Popen(["mono", str(exe), f"-inidirectory={region_path.parent}"], cwd=exe.parent)
-        print(f"Launched region: {name}")
-
-
-# --- Main CLI ---
+# --- Main entry ---
 def main():
-    parser = argparse.ArgumentParser(description="VergeGrid Region Management Tool")
-    subparsers = parser.add_subparsers(dest="command", required=True)
-
-    new_parser = subparsers.add_parser("new", help="Create a new region")
-    new_parser.add_argument("--name", type=str)
-    new_parser.add_argument("--template", type=str)
-    new_parser.add_argument("--estate", type=str)
-    new_parser.add_argument("--location", type=str)
-    new_parser.add_argument("--port", type=str)
-
-    subparsers.add_parser("list", help="List all regions")
-
-    act_parser = subparsers.add_parser("activate", help="Activate a region")
-    act_parser.add_argument("name")
-
-    deact_parser = subparsers.add_parser("deactivate", help="Deactivate a region")
-    deact_parser.add_argument("name")
-
-    subparsers.add_parser("launch", help="Launch all active regions")
-
-    args = parser.parse_args()
-
-    if args.command == "new":
-        create_region_interactive(args)
-    elif args.command == "list":
-        list_regions()
-    elif args.command == "activate":
-        activate_region(args.name)
-    elif args.command == "deactivate":
-        deactivate_region(args.name)
-    elif args.command == "launch":
-        launch_regions()
-
+    print("\n=== VergeGrid Landing Estate Initializer (Automated) ===")
+    create_default_region()
 
 if __name__ == "__main__":
-    ensure_dirs()
     main()

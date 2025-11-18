@@ -308,13 +308,21 @@ def initialize_opensim(install_root, mysql_user, mysql_pass):
 
 
 # ---------------------------------------------------------------------
-# Entry Point (Insecure Defaults)
+# Entry Point (Dynamic Insecure Mode)
 # ---------------------------------------------------------------------
 if __name__ == "__main__":
-    install_root = Path("D:\\VergeGrid")
+    if len(sys.argv) < 2:
+        print("Usage: python init-opensim.py <install_root>")
+        sys.exit(1)
+
+    install_root = Path(sys.argv[1])
     mysql_user = "root"
     mysql_pass = ""  # Insecure mode (no password)
 
-    common.set_log_file(str(install_root / "Logs" / "vergegrid-install.log"))
+    log_path = install_root / "Logs" / "vergegrid-install.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    common.set_log_file(str(log_path))
+
     print("\n[INFO] MySQL running in INSECURE MODE — using 'root' with NO password.\n")
     initialize_opensim(install_root, mysql_user, mysql_pass)
+

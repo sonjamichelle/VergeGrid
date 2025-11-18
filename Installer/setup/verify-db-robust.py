@@ -271,10 +271,15 @@ pause
 
 
 # ------------------------------------------------------------
-# ENTRY POINT
+# ENTRY POINT (Dynamic)
 # ------------------------------------------------------------
 if __name__ == "__main__":
-    install_root = Path("D:\\VergeGrid")
+    if len(sys.argv) < 2:
+        print("Usage: python verify-db-robust.py <install_root>")
+        sys.exit(1)
+
+    install_root = Path(sys.argv[1])
     print("=== VergeGrid Robust Database Verification and Controlled Startup ===")
     result = launch_and_verify(install_root)
     sys.exit(result)
+

@@ -1,0 +1,298 @@
+ergeGrid Region System Goals (Summary)
+
+Design a modern, cloud-style region provisioning system for OpenSim
+Something far beyond the old INI-file mess. Dynamic, scalable, DB-driven, and modular.
+
+Create a clear architecture that supports live region creation and deletion
+No sim restarts, no manual edits. Full runtime injection and teardown.
+
+Define how regions are stored, versioned, and managed
+Using a hybrid DB schema, semantic versioning, DB templates, and optional runtime state saves.
+
+Build a control plane → simulator communication model
+Dual push/pull, REST in 1.0, message queue upgrade later.
+
+Establish simulator identity and registration flow
+Automatic one-time registration issuing per-sim API keys.
+
+Define how region settings update across the system
+Hybrid sync model: eager for critical changes, lazy for cosmetic ones.
+
+Create a robust injection and teardown strategy
+Hybrid injection (SceneManager + fallback).
+Hybrid teardown (soft unload + hard kill fallback).
+
+Provide region deployment rules for scaling
+Dynamic placement with basic resource rules in 1.0
+and a clear path toward full orchestration (2.0+).
+
+Ensure the entire architecture is extendable
+Ready for:
+
+blueprint system
+
+multi-node scaling
+
+region migration
+
+region marketplace
+
+snapshot/rollback
+
+event bus backbone later
+
+Produce a full, unified architecture template
+Something you can drop directly into Code GPT as a design doc and begin implementing without reinventing anything.
+
+In short
+
+We built a complete, future-proof, cloud-inspired regional management architecture for VergeGrid, defined every major subsystem, locked the decisions, and packaged it all so you can implement it cleanly.
+
+
+====================================================================
+                       VERGEGRID 1.0 ARCHITECTURE TEMPLATE
+====================================================================
+
+Cloud-Style Region Provisioning for OpenSim
+
+This document defines the complete VergeGrid architecture based on 
+all selected options across the design process. It serves as the
+foundation for building the Region Module, API, DB schema, templates,
+stub generator, and control plane logic.
+
+====================================================================
+1. REGION CONFIGURATION MODEL
+====================================================================
+Mode Selected: MODE B (Hybrid DB + Stub Files)
+
+- DB holds all region metadata (source of truth)
+- Stub INI files generated automatically for compatibility
+- Files used purely for bootstrapping, debugging, and fallback
+- DB-first, with self-healing and sanity checks
+
+Schema Type: OPTION 3 (Hybrid Schema)
+
+Main Table:
+    uuid
+    name
+    estate_id
+    template_id
+    loc_x, loc_y
+    size_x, size_y
+    port, host
+    physics_type
+    terrain_preset
+    draw_distance_cap
+    version_major, version_minor, version_patch
+    region_state_mode (minimal/full/hybrid flags)
+
+Supplement Tables:
+    region_environment
+    region_terrain
+    region_permissions
+    region_flags
+    region_runtime
+    region_template_data
+    region_history
+    region_placement_rules
+
+====================================================================
+2. REGION TEMPLATE SYSTEM
+====================================================================
+Option Selected: OPTION B (DB-Driven Templates)
+
+Templates stored in DB:
+- Size
+- Physics
+- Terrain preset
+- Environment
+- Parcel layout
+- Flags
+
+Fully web-editable, versioned, compatible with future upgrade into
+blueprint system.
+
+====================================================================
+3. REGION RUNTIME STATE PERSISTENCE
+====================================================================
+Option Selected: OPTION D (Hybrid Runtime Save)
+
+Saved Always:
+- Terrain
+- Environment
+- Parcels
+- Basic flags
+
+Optional (region flag controlled):
+- Prims
+- Mesh
+- Script state
+- Object metadata
+- Texture references
+- Inventory references
+
+Supports:
+- ephemeral regions
+- persistent regions
+- premium build regions
+- future blueprint system
+
+====================================================================
+4. REGION VERSIONING MODEL
+====================================================================
+Option Selected: OPTION 3 (Semantic Versioning)
+
+Each region & template stores:
+- version_major
+- version_minor
+- version_patch
+
+Enables:
+- rollback
+- history
+- consistent template evolution
+- blueprint compatibility
+
+====================================================================
+5. REGION INJECTION METHOD
+====================================================================
+Option Selected: OPTION C (Hybrid Injection)
+
+Primary Path: SceneManager injection
+- True live region creation in memory
+- Modern, fast, flexible
+
+Fallback: RegionLoader reload
+- Legacy safety net
+- Guarantees region loads even if injection fails
+
+====================================================================
+6. REGION TEARDOWN METHOD
+====================================================================
+Option Selected: OPTION C (Hybrid Teardown)
+
+Sequence:
+1. Attempt graceful unload (soft teardown)
+2. If stuck or failed, force hard teardown
+3. Clean DB and stub files
+4. Apply self-healing consistency rules
+
+Ensures reliable region deletion and migration.
+
+====================================================================
+7. SIMULATOR ↔ CONTROL PLANE COMMUNICATION
+====================================================================
+Model Selected: Dual PUSH + PULL
+
+PULL:
+- Sim polls control plane for pending operations
+- Provides safety and recovery when push fails
+
+PUSH:
+- Control plane sends immediate commands to sim
+- Enables real-time region creation, updates, and deletion
+
+Combined:
+- Instant responsiveness + guaranteed consistency
+
+====================================================================
+8. SIMULATOR IDENTITY & AUTHENTICATION
+====================================================================
+Option Selected: OPTION B (Per-Simulator API Keys)
+
+- Issued via automatic one-time registration
+- Stored securely on simulator node
+- No manual copying required
+- Scalable, secure, future-proof
+
+====================================================================
+9. PERSISTENCE BEHAVIOR / WRITE STRATEGY
+====================================================================
+Option Selected: OPTION 1 (Write-Through)
+
+- DB updates immediately committed
+- Stub regeneration immediate
+- Simulator sync applied via push/pull
+- Structural changes wrapped in transactions
+
+====================================================================
+10. REGION SYNC MODEL FOR UPDATES
+====================================================================
+Option Selected: Hybrid Sync (Eager + Lazy Mix)
+
+Eager Updates (instant):
+- region create/delete
+- estate reassignment
+- coordinates, size, physics
+- region enable/disable
+- region restarts
+
+Lazy Updates (scheduled):
+- EEP/environment
+- basic flags
+- prim limits
+- voice, flying, scripts
+- draw distance caps
+
+====================================================================
+11. REGION DEPLOYMENT RULES
+====================================================================
+Option Selected: OPTION B (Dynamic Mapping w/ Basic Rules)
+
+Placement rules consider:
+- region count per simulator
+- CPU load
+- memory load
+- simulator labels/tags (event, sandbox, main)
+- max threshold rules
+
+Control plane assigns regions automatically.
+
+Admins may override manually.
+
+Stepping stone to full orchestrator in future versions.
+
+====================================================================
+12. FINAL ARCHITECTURE SUMMARY
+====================================================================
+
+CONTROL PLANE COMPONENTS:
+- REST API server
+- Web UI
+- Database
+- Template Manager
+- Version Manager
+- Placement Engine
+- Registration Service
+- Logging & audit system
+
+SIMULATOR NODE:
+- OpenSim instance
+- VergeGrid Region Module (core)
+- API key storage
+- Push/Pull communication logic
+- Hybrid region injection
+- Hybrid teardown
+- Stub generator
+- Self-healing engine
+- Local configuration cache
+
+DATA MODEL:
+- Hybrid schema (main + supplemental tables)
+- Semantic versioning
+- DB templates (v1)
+- Blueprint-ready infrastructure
+
+ROADMAP COMPATIBILITY:
+- Option C blueprints
+- Multi-node scheduling
+- Event bus integration
+- Region migration
+- Marketplace templates
+- Cloud control panels
+- Full HA/failover
+- Enterprise orchestration
+
+====================================================================
+END OF VERGEGRID 1.0 ARCHITECTURE TEMPLATE
+====================================================================

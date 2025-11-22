@@ -1,0 +1,78 @@
+{
+    "project_name": "VergeGridRegionSecurity",
+    "version": "1.0",
+    "description": "A cross-platform OpenSimulator plugin providing secure, encrypted region control, trust synchronization, and automatic key rotation.",
+    "target_opensim_version": "0.9.3+",
+    "files": [
+        {
+            "path": "VergeGridRegionSecurity.csproj",
+            "purpose": "Main project configuration for building the module."
+        },
+        {
+            "path": "VergeGridRegionModule.cs",
+            "purpose": "Core module implementing OpenSimulator ISharedRegionModule interface and trust logic."
+        },
+        {
+            "path": "Properties/AssemblyInfo.cs",
+            "purpose": "Assembly metadata and versioning information (auto-updated at build time)."
+        },
+        {
+            "path": "README.md",
+            "purpose": "Project overview, installation, and usage instructions."
+        },
+        {
+            "path": "CHANGELOG.md",
+            "purpose": "Tracks all feature additions, fixes, and version updates."
+        },
+        {
+            "path": "DEV_GUIDE.md",
+            "purpose": "Developer onboarding and internal architecture documentation."
+        },
+        {
+            "path": "Makefile",
+            "purpose": "Linux/macOS build automation script using msbuild."
+        },
+        {
+            "path": "build.sh",
+            "purpose": "Bash build and deployment script for Linux/macOS environments."
+        },
+        {
+            "path": "build.bat",
+            "purpose": "Windows batch build and deployment script."
+        },
+        {
+            "path": "data/vergegrid_trust.enc",
+            "purpose": "Encrypted trust state file, stored securely with AES-256."
+        },
+        {
+            "path": "data/vergegrid_peer_key.pem",
+            "purpose": "RSA private key for peer signing operations."
+        },
+        {
+            "path": "data/vergegrid_peer_meta.json",
+            "purpose": "Metadata about peer key creation and expiry dates."
+        },
+        {
+            "path": "Tests/CryptoTests.cs",
+            "purpose": "Unit tests verifying AES/RSA cryptographic round-trip behavior."
+        },
+        {
+            "path": "Tests/TrustSyncTests.cs",
+            "purpose": "Unit tests validating trust recovery and quorum logic."
+        }
+    ],
+    "deployment": {
+        "target_directory": "/OpenSim/bin/",
+        "build_commands": [
+            "make build",
+            "make install",
+            "build.bat"
+        ],
+        "dependencies": [
+            "OpenSim.Framework.dll",
+            "OpenSim.Region.Framework.dll",
+            "Newtonsoft.Json.dll"
+        ],
+        "runtime": "Mono 6.x+ or .NET Framework 4.8"
+    }
+}

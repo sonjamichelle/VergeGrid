@@ -1,1 +1,0 @@
-// NUnit test for trust logic
